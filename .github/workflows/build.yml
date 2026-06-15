@@ -56,7 +56,7 @@ jobs:
           PYTHON_SCRIPT
           
           while IFS='=' read -r key value; do
-              echo "${{key}}=${{value}}" >> $GITHUB_ENV
+              echo "$key=$value" >> $GITHUB_ENV
           done < parsed_meta.txt
           
           echo "Parsed metadata:"
@@ -119,14 +119,14 @@ jobs:
               
               curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > all_releases.json
               
-              FILTER_PREFIX="v${{LATEST_VERSION}}."
+              FILTER_PREFIX="v$LATEST_VERSION."
               EXISTING_COUNT=$(jq -r --arg fp "$FILTER_PREFIX" \
                 '[.[] | select(.tag_name | startswith($fp))] | length' all_releases.json)
               
               if [ "$EXISTING_COUNT" -eq 0 ]; then
-                  FINAL_VERSION="${{LATEST_VERSION}}"
+                  FINAL_VERSION="$LATEST_VERSION"
               else
-                  FINAL_VERSION="${{LATEST_VERSION}}.${{EXISTING_COUNT}}"
+                  FINAL_VERSION="$LATEST_VERSION.$EXISTING_COUNT"
               fi
               
               echo "Latest release version: $LATEST_VERSION"
@@ -158,14 +158,14 @@ jobs:
               
               curl -s "https://gitlab.com/api/v4/projects/${{OWNER}}%2F${{NAME}}/releases" > gitlab_releases_count.json
               
-              FILTER_PREFIX="v${{LATEST_VERSION}}."
+              FILTER_PREFIX="v$LATEST_VERSION."
               EXISTING_COUNT=$(jq -r --arg fp "$FILTER_PREFIX" \
                 '[.[] | select(.tag_name | startswith($fp))] | length' gitlab_releases_count.json)
               
               if [ "$EXISTING_COUNT" -eq 0 ]; then
-                  FINAL_VERSION="${{LATEST_VERSION}}"
+                  FINAL_VERSION="$LATEST_VERSION"
               else
-                  FINAL_VERSION="${{LATEST_VERSION}}.${{EXISTING_COUNT}}"
+                  FINAL_VERSION="$LATEST_VERSION.$EXISTING_COUNT"
               fi
               
               echo "Latest release version: $LATEST_VERSION"
@@ -239,8 +239,8 @@ jobs:
             echo "⚙️  web_url_fallback is empty — will load error page instead"
           fi
 
-          echo "VERSION_NAME=${{VERSION_NAME}}" >> $GITHUB_ENV
-          echo "VERSION_CODE=${{VERSION_CODE}}" >> $GITHUB_ENV
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
 
       - name: Verify package name consistency
         run: |
@@ -250,7 +250,7 @@ jobs:
           
           echo "Searching for incorrect package names..."
           for file in $(find app/src -type f \( -name "*.kt" -o -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) ! -path "*/build/*"); do
-            if grep -q "com\.mamie.*tracks2pictures" "$file" && ! grep -q "^package ${{PKG_NAME}}$" "$file" && ! grep -q "namespace '${{PKG_NAME}}'" "$file" && ! grep -q "applicationId \"${{PKG_NAME}}\"" "$file"; then
+            if grep -q "com\.mamie.*tracks2pictures" "$file" && ! grep -q "^package $PKG_NAME$" "$file" && ! grep -q "namespace '$PKG_NAME'" "$file" && ! grep -q "applicationId \"$PKG_NAME\"" "$file"; then
               echo "⚠️  Found potential incorrect package in: $file"
               grep "com\.mamie.*tracks2pictures" "$file" | head -3
             fi
