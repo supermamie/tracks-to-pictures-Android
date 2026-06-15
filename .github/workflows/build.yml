@@ -63,7 +63,7 @@ jobs:
 
           # Update web URL if provided
           if [ -n "${{ github.event.inputs.web_url }}" ]; then
-            sed -i "s|'https://[^']*'|'${{ github.event.inputs.web_url }}'|" app/build.gradle
+            sed -i "s/buildConfigField \"String\", \"WEB_URL\", \".*\"/buildConfigField \"String\", \"WEB_URL\", \"${{ github.event.inputs.web_url }}\"/" app/build.gradle
           fi
 
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
