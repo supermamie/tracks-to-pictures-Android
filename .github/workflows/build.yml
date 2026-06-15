@@ -95,7 +95,7 @@ jobs:
               
             elif echo ${{ github.event.inputs.git_repo }} | grep -q "gitlab.com"; then
               # GitLab API: get latest release
-              curl -s "https://gitlab.com/api/v4/projects/${OWNER}_${NAME}/releases" > latest_releases.json
+              curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > latest_releases.json
               
               LATEST_VERSION=$(jq -r '.[0].tag_name // empty' latest_releases.json)
               RELEASE_URL=$(jq -r '.[0].assets.links[0].direct_asset_url' latest_releases.json)
