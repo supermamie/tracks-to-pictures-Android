@@ -12,7 +12,7 @@
 # ------------------------------------------------------------------
 # Package identification
 # ------------------------------------------------------------------
-package_name: "com.mamieia.tracks2pictures"
+package_name: "com.mamie.ia.tracks2pictures"
 # Package name (Java namespace) — do not change after first release
 # F-Droid requirement: unique reverse-domain style identifier
 # Examples: com.google.android.maps, org.mozilla.firefox, io.github.user.app
@@ -97,7 +97,7 @@ license: "GPL-3.0-or-later"
 # ------------------------------------------------------------------
 # Author / Maintainer
 # ------------------------------------------------------------------
-author: "mamie_ia"
+author: "Mamie"
 # GitHub / GitLab username or organization
 # F-Droid will use this for contact info and contribution tracking
 
@@ -116,10 +116,10 @@ issue_tracker: "https://gitlab.com/mamie_ia/tracks-to-pictures/-/issues"
 # Where users report bugs
 # F-Droid will link to this in the app's "About" section
 
-website: "https://mamie-ia.gitlab.io/tracks-to-pictures/"
+website: "https://gitlab.com/mamie_ia/tracks-to-pictures/-/blob/main/README.en.md"
 # App website (for F-Droid listing and WebView fallback)
 
-support: "https://gitlab.com/mamie_ia/tracks-to-pictures/-/discussions"
+support: ""
 # Support channel (forum, chat, email)
 
 # ------------------------------------------------------------------
