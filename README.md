@@ -1,35 +1,35 @@
 # Tracks to Pictures — Android
 
-Application Android WebView enrobant [tracks-to-pictures](https://gitlab.com/mamie_ia/tracks-to-pictures).
+Android WebView app wrapping [tracks-to-pictures](https://gitlab.com/mamie_ia/tracks-to-pictures).
 
-## Construction
+## Build
 
-### Build manuel (GitHub Actions)
+### Manual build (GitHub Actions)
 
-1. Aller dans l'onglet **Actions** du repo
-2. Cliquer sur **Build APK** → **Run workflow**
-3. Configurer les paramètres (version name, URL du web app)
-4. Cliquer **Run**
+1. Go to the **Actions** tab in the repo
+2. Click **Build APK** → **Run workflow**
+3. Configure parameters (version name, web URL)
+4. Click **Run**
 
-L'APK signé est automatiquement uploadé en tant que draft sur GitHub Releases.
+The signed APK is automatically uploaded as a draft to GitHub Releases.
 
-### Build local
+### Local build
 
 ```bash
 ./gradlew assembleRelease
 ```
 
-L'APK signé se trouve dans `app/build/outputs/apk/release/`.
+The signed APK is located in `app/build/outputs/apk/release/`.
 
-## Signature
+## Signing
 
-Le keystore public est `app/release-key.keystore` :
+The public keystore is `app/release-key.keystore`:
 
-- **Alias :** `trackstopictures`
-- **Passwords :** `android` (store + key)
-- **Validité :** 10 000 jours
+- **Alias:** `trackstopictures`
+- **Passwords:** `android` (store + key)
+- **Validity:** 10,000 days
 
-## Déploiement
+## Deployment
 
-- **F-Droid :** le build est reproductible (signature copiée du keystore public)
-- **Distribution directe :** l'APK signé est disponible sur GitHub Releases
+- **F-Droid:** reproducible build (signature copied from public keystore)
+- **Direct distribution:** the signed APK is available on GitHub Releases
