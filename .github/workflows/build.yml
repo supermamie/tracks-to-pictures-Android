@@ -95,18 +95,40 @@ jobs:
             echo "Downloading latest release from ${{ env.git_repo }}..."
             
             # Extract repo owner and name from URL
-            REPO=$(echo ${{ env.git_repo }} | sed -E 's|https://([^/]+)/(.*)|\1/\2|' | sed 's|\.git$||')
-            OWNER=$(echo $REPO | cut -d'/' -f1)
-            NAME=$(echo $REPO | cut -d'/' -f2)
+            # Format: https://github.com/owner/repo.git or https://gitlab.com/owner/repo
+            REPO_PATH=$(echo "${{ env.git_repo }}" | sed -E 's|^https://[^/]+/([^/]+)/(.+)$|\1/\2|')
+            OWNER=$(echo "$REPO_PATH" | cut -d'/' -f1)
+            NAME=$(echo "$REPO_PATH" | cut -d'/' -f2)
             
-            echo "Repo: $OWNER/$NAME"
+            echo "Repo path: $REPO_PATH"
+            echo "Owner: $OWNER"
+            echo "Name: $NAME"
             
             # Get latest release
-            if echo ${{ env.git_repo }} | grep -q "github.com"; then
+            if echo "${{ env.git_repo }}" | grep -q "github.com"; then
               # GitHub API: get latest release
+              echo "Fetching from GitHub API..."
               curl -s "https://api.github.com/repos/$OWNER/$NAME/releases/latest" > latest_release.json
+              
+              # Check if response is valid JSON
+              if ! jq empty latest_release.json 2>/dev/null; then
+                echo "❌ Invalid JSON from GitHub API"
+                cat latest_release.json
+                exit 1
+              fi
+              
               LATEST_VERSION=$(jq -r '.tag_name' latest_release.json | sed 's/^v//')
-              RELEASE_URL=$(jq -r '.assets[].browser_download_url' latest_release.json | head -1)
+              if [ "$LATEST_VERSION" = "null" ] || [ -z "$LATEST_VERSION" ]; then
+                echo "❌ No version found in GitHub release"
+                exit 1
+              fi
+              
+              # Get download URL for the first asset
+              RELEASE_URL=$(jq -r '.assets[0].browser_download_url' latest_release.json)
+              if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then
+                echo "❌ No download URL found in GitHub release"
+                exit 1
+              fi
               
               # Count existing releases with same version prefix (e.g., 1.0.3.1, 1.0.3.2)
               curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > all_releases.json
@@ -128,20 +150,41 @@ jobs:
               echo "Existing builds with same version: $EXISTING_COUNT"
               echo "New version: $FINAL_VERSION"
               
-            elif echo ${{ env.git_repo }} | grep -q "gitlab.com"; then
+            elif echo "${{ env.git_repo }}" | grep -q "gitlab.com"; then
               # GitLab API: get latest release
-              curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > latest_releases.json
+              echo "Fetching from GitLab API..."
               
-              LATEST_VERSION=$(jq -r '.[0].tag_name // empty' latest_releases.json)
-              RELEASE_URL=$(jq -r '.[0].assets.links[0].direct_asset_url' latest_releases.json)
+              # GitLab API: get releases sorted by date (most recent first)
+              curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > gitlab_releases.json
+              
+              # Check if response is valid JSON
+              if ! jq empty gitlab_releases.json 2>/dev/null; then
+                echo "❌ Invalid JSON from GitLab API"
+                cat gitlab_releases.json
+                exit 1
+              fi
+              
+              # Get the first (most recent) release
+              LATEST_VERSION=$(jq -r '.[0].tag_name // empty' gitlab_releases.json)
+              if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
+                echo "❌ No version found in GitLab releases"
+                exit 1
+              fi
+              
+              # Get download URL for the first asset
+              RELEASE_URL=$(jq -r '.[0].assets.links[0].direct_asset_url // empty' gitlab_releases.json)
+              if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then
+                echo "❌ No download URL found in GitLab release"
+                exit 1
+              fi
               
               # Count existing releases with same version prefix (e.g., 1.0.3.1, 1.0.3.2)
-              curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > gitlab_releases.json
+              curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > gitlab_releases_count.json
               
               # Count tags starting with "v{LATEST_VERSION}." (e.g., v1.0.3.1)
               FILTER_PREFIX="v${LATEST_VERSION}."
               EXISTING_COUNT=$(jq -r --arg fp "$FILTER_PREFIX" \
-                '[.[] | select(.tag_name | startswith($fp))] | length' gitlab_releases.json)
+                '[.[] | select(.tag_name | startswith($fp))] | length' gitlab_releases_count.json)
               
               # First build with this version -> use LATEST_VERSION itself (e.g., 1.0.3)
               # Subsequent builds -> increment (e.g., 1.0.3.1, 1.0.3.2)
@@ -156,7 +199,7 @@ jobs:
               echo "New version: $FINAL_VERSION"
               
             else
-              echo "Unsupported repo type"
+              echo "❌ Unsupported repo type (only github.com and gitlab.com supported)"
               exit 1
             fi
             
