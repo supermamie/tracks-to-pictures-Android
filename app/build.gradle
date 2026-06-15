@@ -1,7 +1,7 @@
 import java.security.KeyStore
 
 plugins {
-    id 'com.android.application'
+    id 'com.android.application' version '8.4.0'
 }
 
 def keystoreFile = file("release-key.keystore")
@@ -9,6 +9,10 @@ def keystoreFile = file("release-key.keystore")
 android {
     namespace 'com.mamieia.tracks2pictures'
     compileSdk 34
+
+    buildFeatures {
+        buildConfig true
+    }
 
     defaultConfig {
         applicationId "com.mamieia.tracks2pictures"
@@ -26,6 +30,11 @@ android {
                 storePassword = "android"
                 keyAlias = "trackstopictures"
                 keyPassword = "android"
+            } else {
+                storeFile = file("dev-debug.keystore")
+                storePassword = "android"
+                keyAlias = "debug"
+                keyPassword = "android"
             }
         }
     }
@@ -34,11 +43,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            if (keystoreFile.exists()) {
-                signingConfig = signingConfigs.release
-            } else {
-                signingConfig = signingConfigs.debug
-            }
+            signingConfig = signingConfigs.release
         }
     }
 
@@ -46,8 +51,6 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
-
-    signingConfig = signingConfigs.debug
 }
 
 dependencies {
