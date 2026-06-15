@@ -136,7 +136,7 @@ jobs:
             elif echo "${{ env.git_repo }}" | grep -q "gitlab.com"; then
               echo "Fetching from GitLab API..."
               
-              curl -s "https://gitlab.com/api/v4/projects/${{OWNER}}%2F${{NAME}}/releases" > gitlab_releases.json
+              curl -s "https://gitlab.com/api/v4/projects/$OWNER%2F$NAME/releases" > gitlab_releases.json
               
               if ! jq empty gitlab_releases.json 2>/dev/null; then
                 echo "❌ Invalid JSON from GitLab API"
@@ -156,7 +156,7 @@ jobs:
                 exit 1
               fi
               
-              curl -s "https://gitlab.com/api/v4/projects/${{OWNER}}%2F${{NAME}}/releases" > gitlab_releases_count.json
+              curl -s "https://gitlab.com/api/v4/projects/$OWNER%2F$NAME/releases" > gitlab_releases_count.json
               
               FILTER_PREFIX="v$LATEST_VERSION."
               EXISTING_COUNT=$(jq -r --arg fp "$FILTER_PREFIX" \
