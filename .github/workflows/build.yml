@@ -85,10 +85,14 @@ jobs:
               # Count existing releases with same version prefix (e.g., 1.0.3.1, 1.0.3.2)
               curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > all_releases.json
               
-              EXISTING_COUNT=$(jq -r '[.[] | select(.tag_name | startswith("v${LATEST_VERSION}.\"))] | length' all_releases.json)
+              # Count tags starting with "v{LATEST_VERSION}." (e.g., v1.0.3.1)
+              # Using shell variable directly (not in single quotes)
+              FILTER_PREFIX="v${LATEST_VERSION}."
+              EXISTING_COUNT=$(jq -r --arg fp "$FILTER_PREFIX" \
+                '[.[] | select(.tag_name | startswith($fp))] | length' all_releases.json)
               
-              # First build with this version → use LATEST_VERSION itself (e.g., 1.0.3)
-              # Subsequent builds → increment (e.g., 1.0.3.1, 1.0.3.2)
+              # First build with this version -> use LATEST_VERSION itself (e.g., 1.0.3)
+              # Subsequent builds -> increment (e.g., 1.0.3.1, 1.0.3.2)
               if [ "$EXISTING_COUNT" -eq 0 ]; then
                   FINAL_VERSION="${LATEST_VERSION}"
               else
@@ -107,12 +111,15 @@ jobs:
               RELEASE_URL=$(jq -r '.[0].assets.links[0].direct_asset_url' latest_releases.json)
               
               # Count existing releases with same version prefix (e.g., 1.0.3.1, 1.0.3.2)
-              curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > all_releases.json
+              curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > gitlab_releases.json
               
-              EXISTING_COUNT=$(jq -r '[.[] | select(.tag_name | startswith("v${LATEST_VERSION}.\"))] | length' all_releases.json)
+              # Count tags starting with "v{LATEST_VERSION}." (e.g., v1.0.3.1)
+              FILTER_PREFIX="v${LATEST_VERSION}."
+              EXISTING_COUNT=$(jq -r --arg fp "$FILTER_PREFIX" \
+                '[.[] | select(.tag_name | startswith($fp))] | length' gitlab_releases.json)
               
-              # First build with this version → use LATEST_VERSION itself (e.g., 1.0.3)
-              # Subsequent builds → increment (e.g., 1.0.3.1, 1.0.3.2)
+              # First build with this version -> use LATEST_VERSION itself (e.g., 1.0.3)
+              # Subsequent builds -> increment (e.g., 1.0.3.1, 1.0.3.2)
               if [ "$EXISTING_COUNT" -eq 0 ]; then
                   FINAL_VERSION="${LATEST_VERSION}"
               else
@@ -175,9 +182,9 @@ jobs:
             WEB_URL="${{ github.event.inputs.web_url }}"
             sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", '${WEB_URL}'/" app/build.gradle
           else
-            # Empty web_url — set about:blank so MainActivity loads error.html
+            # Empty web_url - set about:blank so MainActivity loads error.html
             sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", 'about:blank'/" app/build.gradle
-            echo "web_url is empty — will load error page instead" >> $GITHUB_STEP_LOG
+            echo "web_url is empty - will load error page instead" >> $GITHUB_STEP_LOG
           fi
 
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
