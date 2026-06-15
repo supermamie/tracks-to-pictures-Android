@@ -1,0 +1,55 @@
+import java.security.KeyStore
+
+plugins {
+    id 'com.android.application'
+}
+
+def keystoreFile = file("release-key.keystore")
+
+android {
+    namespace 'com.mamieia.tracks2pictures'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.mamieia.tracks2pictures"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+        buildConfigField "String", "WEB_URL", '"https://mamie-ia.gitlab.io/tracks-to-pictures/"'
+    }
+
+    signingConfigs {
+        release {
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = "android"
+                keyAlias = "trackstopictures"
+                keyPassword = "android"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (keystoreFile.exists()) {
+                signingConfig = signingConfigs.release
+            } else {
+                signingConfig = signingConfigs.debug
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    signingConfig = signingConfigs.debug
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}

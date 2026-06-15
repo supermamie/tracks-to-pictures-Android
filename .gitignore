@@ -1,0 +1,23 @@
+# Build outputs
+build/
+app/build/
+.gradle/
+*.aab
+*.apk
+*.ap_
+
+# Android Studio
+.idea/
+*.iml
+.local/
+
+# Android
+local.properties
+.DS_Store
+secrets.properties
+
+# Gradle
+.gradle/
+
+# Generated files
+local.properties
