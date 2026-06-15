@@ -251,6 +251,46 @@ jobs:
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
           echo "VERSION_CODE=${VERSION_CODE}" >> $GITHUB_ENV
 
+      - name: Verify package name consistency
+        run: |
+          # Define the correct package name from metadata
+          PKG_NAME="${{ env.package_name }}"
+          
+          # Pattern to search for (any variation of com.mamie...tracks2pictures)
+          # We want to ensure ALL files use the EXACT package_name from metadata
+          
+          echo "Expected package name: $PKG_NAME"
+          
+          # Search for incorrect package names in source files
+          # Skip build/ and .gradle/ cache directories
+          echo "Searching for incorrect package names..."
+          for file in $(find app/src -type f \( -name "*.kt" -o -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) ! -path "*/build/*"); do
+            # Check if file contains a package pattern but NOT the correct one
+            if grep -q "com\.mamie.*tracks2pictures" "$file" && ! grep -q "^package ${PKG_NAME}$" "$file" && ! grep -q "namespace '${PKG_NAME}'" "$file" && ! grep -q "applicationId \"${PKG_NAME}\"" "$file"; then
+              # File has a package pattern but not matching the metadata
+              echo "⚠️  Found potential incorrect package in: $file"
+              grep "com\.mamie.*tracks2pictures" "$file" | head -3
+            fi
+          done
+          
+          # Also check for any hardcoded package names in comments/docs
+          for file in $(find . -type f \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" \) -not -path "./app-release-metadata.yml"); do
+            if grep -q "com\.mamieia\.tracks2pictures" "$file"; then
+              echo "⚠️  Found old package name 'com.mamieia.tracks2pictures' in: $file"
+            fi
+          done
+          
+          echo "Package name consistency check complete."
+          
+          # Verify no old package name remains
+          if grep -r "com\.mamieia\.tracks2pictures" app/src/ app/build.gradle 2>/dev/null; then
+            echo "❌ ERROR: Old package name 'com.mamieia.tracks2pictures' still present!"
+            echo "Please update app-release-metadata.yml and all source files."
+            exit 1
+          fi
+          
+          echo "✓ No old package name found."
+          
       - name: Build APK
         run: |
           chmod +x ./gradlew
