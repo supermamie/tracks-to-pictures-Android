@@ -23,9 +23,14 @@ class MainActivity : AppCompatActivity() {
         if (tryLoadAsset(webView, "web/index.html")) {
             webView.loadUrl(localUrl)
         } else {
-            // Fallback to remote URL
-            webView.loadUrl(BuildConfig.WEB_URL)
-            Log.w("MainActivity", "No local bundle found, loading remote URL: ${BuildConfig.WEB_URL}")
+            // Fallback to remote URL or local error page
+            if (BuildConfig.WEB_URL == "about:blank") {
+                webView.loadUrl("file:///android_asset/error.html")
+                Log.w("MainActivity", "No web URL configured, loading error page")
+            } else {
+                webView.loadUrl(BuildConfig.WEB_URL)
+                Log.w("MainActivity", "No local bundle found, loading remote URL: ${BuildConfig.WEB_URL}")
+            }
         }
     }
     

@@ -159,6 +159,10 @@ jobs:
           if [ -n "${{ github.event.inputs.web_url }}" ]; then
             WEB_URL="${{ github.event.inputs.web_url }}"
             sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", '\"${WEB_URL}\"'/" app/build.gradle
+          else
+            # Empty web_url — set about:blank so MainActivity loads error.html
+            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", '\"about:blank\"'/" app/build.gradle
+            echo "web_url is empty — will load error page instead" >> $GITHUB_STEP_LOG
           fi
 
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
