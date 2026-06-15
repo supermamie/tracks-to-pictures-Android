@@ -270,7 +270,7 @@ jobs:
           else
             # Empty web_url_fallback — set about:blank so MainActivity loads error.html
             sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", 'about:blank'/" app/build.gradle
-            echo "web_url_fallback is empty — will load error page instead" >> $GITHUB_STEP_LOG
+            echo "⚙️  web_url_fallback is empty — will load error page instead"
           fi
 
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
