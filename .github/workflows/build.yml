@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: "Version name (e.g., 1.0.0)"
+        description: "Version name (e.g., 1.0.0). If git_repo is provided, uses latest release version + counter."
         required: false
         default: "1.0.0"
       git_repo:
@@ -75,16 +75,46 @@ jobs:
             
             echo "Repo: $OWNER/$NAME"
             
-            # Get latest release (use GitHub API for GitHub repos, GitLab API otherwise)
+            # Get latest release
             if echo ${{ github.event.inputs.git_repo }} | grep -q "github.com"; then
-              RELEASE_URL=$(curl -s "https://api.github.com/repos/$OWNER/$NAME/releases/latest" | jq -r '.assets[].browser_download_url' | head -1)
+              # GitHub API: get latest release
+              curl -s "https://api.github.com/repos/$OWNER/$NAME/releases/latest" > latest_release.json
+              LATEST_VERSION=$(jq -r '.tag_name' latest_release.json | sed 's/^v//')
+              RELEASE_URL=$(jq -r '.assets[].browser_download_url' latest_release.json | head -1)
+              
+              # Count existing releases with same version prefix
+              curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > all_releases.json
+              
+              EXISTING_COUNT=$(jq -r '[.[] | select(.tag_name | startswith("v" + "${LATEST_VERSION}."))] | length' all_releases.json)
+              NEW_COUNTER=$((EXISTING_COUNT + 1))
+              FINAL_VERSION="${LATEST_VERSION}.${NEW_COUNTER}"
+              
+              echo "Latest release version: $LATEST_VERSION"
+              echo "Existing builds with same version: $EXISTING_COUNT"
+              echo "New version: $FINAL_VERSION"
+              
             elif echo ${{ github.event.inputs.git_repo }} | grep -q "gitlab.com"; then
-              # GitLab API
-              RELEASE_URL=$(curl -s "https://gitlab.com/api/v4/projects/${OWNER}_${NAME}/releases" | jq -r '.[0].assets.links[0].direct_asset_url')
+              # GitLab API: get latest release
+              curl -s "https://gitlab.com/api/v4/projects/${OWNER}_${NAME}/releases" > latest_releases.json
+              
+              LATEST_VERSION=$(jq -r '.[0].tag_name // empty' latest_releases.json)
+              RELEASE_URL=$(jq -r '.[0].assets.links[0].direct_asset_url' latest_releases.json)
+              
+              EXISTING_COUNT=$(jq -r '[.[] | select(.tag_name | startswith("${LATEST_VERSION}."))] | length' latest_releases.json)
+              NEW_COUNTER=$((EXISTING_COUNT + 1))
+              FINAL_VERSION="${LATEST_VERSION}.${NEW_COUNTER}"
+              
+              echo "Latest release version: $LATEST_VERSION"
+              echo "Existing builds with same version: $EXISTING_COUNT"
+              echo "New version: $FINAL_VERSION"
+              
             else
               echo "Unsupported repo type"
               exit 1
             fi
+            
+            # Save final version to file (persists between steps)
+            echo "$FINAL_VERSION" > version_name.txt
             
             echo "Release URL: $RELEASE_URL"
             curl -sL "$RELEASE_URL" -o web-archive.zip
@@ -109,6 +139,16 @@ jobs:
       - name: Set version
         run: |
           VERSION_NAME="${{ github.event.inputs.version_name }}"
+          
+          # If git_repo was provided and no explicit version_name, use computed version
+          if [ -n "${{ github.event.inputs.git_repo }}" ] && [ -z "${{ github.event.inputs.version_name }}" ]; then
+            if [ -f version_name.txt ]; then
+              VERSION_NAME=$(cat version_name.txt)
+              echo "Using computed version from git repo: $VERSION_NAME"
+            fi
+          fi
+          
+          # Increment version_code based on git history
           VERSION_CODE=$(( $(git rev-list --count HEAD) + 1000 ))
 
           # Update build.gradle with new version
