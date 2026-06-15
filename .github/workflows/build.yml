@@ -171,8 +171,8 @@ jobs:
                 exit 1
               fi
               
-              # Get download URL for the first asset
-              RELEASE_URL=$(jq -r '.[0].assets.links[0].direct_asset_url // empty' gitlab_releases.json)
+              # Get download URL for the first asset (GitLab stores URLs in assets.sources)
+              RELEASE_URL=$(jq -r '.[0].assets.sources[0].url // empty' gitlab_releases.json)
               if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then
                 echo "❌ No download URL found in GitLab release"
                 exit 1
