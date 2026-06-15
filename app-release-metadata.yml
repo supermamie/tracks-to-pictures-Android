@@ -1,0 +1,230 @@
+# app-release-metadata.yml
+# ========================================
+# App metadata for build automation and F-Droid
+# ========================================
+# This file replaces manual GitHub Release inputs.
+# The build workflow reads this file to set version,
+# bundle content, and generate the APK.
+#
+# Format: YAML (human-readable, supports comments)
+# Location: Repo root (app-release-metadata.yml)
+
+# ------------------------------------------------------------------
+# Package identification
+# ------------------------------------------------------------------
+package_name: "com.mamieia.tracks2pictures"
+# Package name (Java namespace) — do not change after first release
+# F-Droid requirement: unique reverse-domain style identifier
+# Examples: com.google.android.maps, org.mozilla.firefox, io.github.user.app
+
+# ------------------------------------------------------------------
+# App identity
+# ------------------------------------------------------------------
+app_name: "Tracks to Pictures"
+# Display name shown on the device home screen
+# Keep it short (1-2 lines max on Android launcher)
+# For translations, see: app/src/main/res/values/strings.xml
+
+# ------------------------------------------------------------------
+# Versioning (auto-incremented by workflow)
+# ------------------------------------------------------------------
+# version_name and version_code are NOT set here.
+# The workflow reads the latest release and increments automatically.
+# Manual override is possible by editing this file before build.
+
+# version_name: "1.0.0"          # Semantic versioning (MAJOR.MINOR.PATCH)
+# version_code: 1                # Integer, monotonically increasing
+# Uncomment the lines above to manually set version instead of auto-increment
+
+# ------------------------------------------------------------------
+# Web content (the app's website)
+# ------------------------------------------------------------------
+# Set ONE of these (or leave empty for error page):
+
+# Git repo URL — workflow fetches latest release from here
+# The workflow will:
+#   - fetch the latest release tag (e.g., "v1.0.3")
+#   - download the release asset
+#   - bundle it into the APK
+#   - auto-increment version (1.0.3 → 1.0.3.1 if rebuilt)
+git_repo: "https://gitlab.com/mamie_ia/tracks-to-pictures"
+
+# Direct URL to an archive (zip/tar.gz) — workflow downloads and extracts it
+# archive_url: "https://example.com/web-archive.zip"
+# Leave empty if using git_repo instead.
+
+# Fallback URL for the WebView (if no bundle is present)
+# Used when the app cannot find the bundled web content.
+# Leave empty to show the error page instead.
+web_url_fallback: ""
+
+# ------------------------------------------------------------------
+# App icon (logo)
+# ------------------------------------------------------------------
+# The app icon should be placed in:
+#   app/src/main/res/mipmap-* directories
+# or as a scalable vector graphic:
+#   app/src/main/res/drawable/ic_launcher.xml
+#
+# Recommended sizes:
+#   - 48x48  (mdpi)   — smallest phones
+#   - 72x72  (hdpi)   — medium phones
+#   - 96x96  (xhdpi)  — large phones / tablets
+#   - 144x144 (xxhdpi) — high-res displays
+#   - 192x192 (xxxhdpi) — very large displays
+#
+# For F-Droid reproducible builds:
+#   - Use vector drawables (SVG) if possible
+#   - Or provide raster icons in a consistent format (PNG, 256x256 min)
+#   - F-Droid will verify the icon matches the source
+
+# ------------------------------------------------------------------
+# License information
+# ------------------------------------------------------------------
+license: "GPL-3.0-or-later"
+# SPDX short identifier (see: https://spdx.org/licenses/)
+# Common values:
+#   - GPL-3.0-or-later
+#   - Apache-2.0
+#   - MIT
+#   - BSD-3-Clause
+#   - CC-BY-SA-4.0
+#   - AGPL-3.0-or-later
+
+# License text URL (optional, for the Play Store / F-Droid listing)
+# license_text_url: "https://gitlab.com/mamie_ia/tracks-to-pictures/-/blob/main/LICENSE"
+
+# ------------------------------------------------------------------
+# Author / Maintainer
+# ------------------------------------------------------------------
+author: "mamie_ia"
+# GitHub / GitLab username or organization
+# F-Droid will use this for contact info and contribution tracking
+
+# Maintainer (if different from author)
+# maintainer: "your-name"
+
+# ------------------------------------------------------------------
+# Repository links
+# ------------------------------------------------------------------
+source_repository: "https://gitlab.com/mamie_ia/tracks-to-pictures"
+# Primary source code repository (for F-Droid to clone and build)
+# This is what F-Droid will use as the source for the app.
+# The Android APK workflow uses this to fetch the latest release.
+
+issue_tracker: "https://gitlab.com/mamie_ia/tracks-to-pictures/-/issues"
+# Where users report bugs
+# F-Droid will link to this in the app's "About" section
+
+website: "https://mamie-ia.gitlab.io/tracks-to-pictures/"
+# App website (for F-Droid listing and WebView fallback)
+
+support: "https://gitlab.com/mamie_ia/tracks-to-pictures/-/discussions"
+# Support channel (forum, chat, email)
+
+# ------------------------------------------------------------------
+# App classification (for F-Droid / Play Store)
+# ------------------------------------------------------------------
+categories:
+  - "Education"
+  - "Photography"
+  - "Productivity"
+# F-Droid categories (from: https://gitlab.com/fdroid/fdroid-website/-/blob/master/app/categories.json)
+
+keywords:
+  - "tracks"
+  - "hiking"
+  - "gps"
+  - "maps"
+  - "topography"
+  - "outdoors"
+  - "geolocation"
+
+# ------------------------------------------------------------------
+# Translation and internationalization
+# ------------------------------------------------------------------
+translation: true
+# If true, the app supports multiple languages
+# See: app/src/main/res/values-* directories
+# For F-Droid: translation updates are auto-detected
+
+# ------------------------------------------------------------------
+# Privacy and security
+# ------------------------------------------------------------------
+privacy_url: ""
+# URL to the app's privacy policy (for F-Droid listing)
+
+# Permissions used by the app (for F-Droid description)
+permissions:
+  - "android.permission.ACCESS_FINE_LOCATION"
+  - "android.permission.ACCESS_COARSE_LOCATION"
+  - "android.permission.INTERNET"
+  - "android.permission.FOREGROUND_SERVICE"
+  - "android.permission.WAKE_LOCK"
+
+# ------------------------------------------------------------------
+# Additional metadata
+# ------------------------------------------------------------------
+auto_update: true
+# If true, F-Droid will auto-update this app when a new version is available
+# If false, users must manually update
+
+# Build tags (for F-Droid build tracking)
+# build_tags: []
+
+# ------------------------------------------------------------------
+# CHANGELOG (optional, manually maintained)
+# ------------------------------------------------------------------
+# Each release should update this section.
+# The workflow does NOT read this file for versioning — it uses
+# the git releases API instead. But F-Droid can read this for
+# the "What's New" screen.
+#
+# Example format:
+#
+# 1.0.0 — 2026-06-15
+#   - Initial release
+#   - Bundle web content (tracks-to-pictures v1.0.3)
+#   - Added geolocation support
+#
+# 1.0.1 — 2026-06-20
+#   - Fixed WebView loading issue
+#   - Updated bundled web content to v1.0.4
+#
+# 1.0.2 — 2026-07-01
+#   - Added offline mode (when bundled content available)
+#   - Improved error page localization
+
+# ------------------------------------------------------------------
+# NOTES FOR F-DROID
+# ------------------------------------------------------------------
+# To publish on F-Droid:
+# 1. Clone fdroiddata: git clone https://gitlab.com/fdroid/fdroiddata.git
+# 2. Create a new entry: fdroid update add-https --url <source_repository>
+#    OR manually create: fdroiddata/data/<package_name>.yml
+# 3. The YAML file must contain:
+#    - pkg: package_name (from this file)
+#    - source: source_repository URL
+#    - webUrl: website URL
+#    - summary: short description
+#    - desc: full description
+#    - license: license (from this file)
+#    - issueTracker: issue tracker URL
+# 4. Submit the PR to fdroiddata and wait for review
+#
+# The app icon should be:
+#   - Named: app/src/main/res/mipmap-*/ic_launcher.png
+#   - Or: app/src/main/res/drawable/ic_launcher.xml (vector)
+#   - Size: at least 256x256px
+#
+# F-Droid will verify:
+#   - The APK is reproducible (same source → same APK)
+#   - The bundle content matches the released version
+#   - The package name matches fdroiddata entry
+
+# ------------------------------------------------------------------
+# END OF FILE
+# ------------------------------------------------------------------
+# This file is maintained by the project author.
+# Changes to this file should be committed before building.
+# The build workflow reads it to determine version, content, and metadata.

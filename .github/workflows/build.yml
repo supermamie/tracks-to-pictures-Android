@@ -1,23 +1,17 @@
 # .github/workflows/build.yml
-# Build APK — manual trigger only (no auto-trigger on push/PR)
+# Build APK — reads metadata from app-release-metadata.yml
+# No manual inputs needed — version, content, and URLs auto-detected
 
 name: Build APK
 
 on:
   workflow_dispatch:
-    inputs:
-      git_repo:
-        description: "Git repo URL to fetch latest release from (GitHub/GitLab) — version auto-determined"
-        required: false
-        default: ""
-      archive_url:
-        description: "Direct URL to an archive file to download — version auto-incremented from last release"
-        required: false
-        default: ""
-      web_url:
-        description: "Fallback web URL if no bundle is provided (leave empty for error page)"
-        required: false
-        default: ""
+  push:
+    branches: [main]
+    paths:
+      - 'app-release-metadata.yml'
+    paths-ignore:
+      - '.github/workflows/build.yml'
 
 jobs:
   build:
@@ -27,6 +21,60 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Parse metadata file
+        run: |
+          # Install Python YAML parser if not available
+          pip install pyyaml 2>/dev/null || true
+          
+          # Read app-release-metadata.yml and extract values
+          python3 << 'PYTHON_SCRIPT'
+          import yaml
+          
+          try:
+              import yaml
+              with open('app-release-metadata.yml', 'r') as f:
+                  meta = yaml.safe_load(f)
+          except ImportError:
+              # Fallback: simple key=value parser (no nested structures)
+              meta = {}
+              with open('app-release-metadata.yml', 'r') as f:
+                  for line in f:
+                      line = line.strip()
+                      if line and not line.startswith('#') and ':' in line:
+                          key, value = line.split(':', 1)
+                          key = key.strip()
+                          value = value.strip().strip('"').strip("'")
+                          if value and not value.startswith('#'):
+                              meta[key] = value
+          
+          # Output key=value pairs for shell use
+          with open('parsed_meta.txt', 'w') as out:
+              for key, value in meta.items():
+                  # Handle None and empty values
+                  if value is None:
+                      out.write(f'{key}=\n')
+                  elif isinstance(value, str) and value == '':
+                      out.write(f'{key}=\n')
+                  elif isinstance(value, bool):
+                      out.write(f'{key}={str(value).lower()}\n')
+                  elif isinstance(value, (int, float)):
+                      out.write(f'{key}={value}\n')
+                  elif isinstance(value, list):
+                      out.write(f'{key}={"|".join(str(v) for v in value)}\n')
+                  else:
+                      out.write(f'{key}={value}\n')
+          PYTHON_SCRIPT
+          
+          # Load values into GitHub environment
+          while IFS='=' read -r key value; do
+              echo "${key}=${value}" >> $GITHUB_ENV
+          done < parsed_meta.txt
+          
+          echo "Parsed metadata:"
+          echo "  git_repo: $git_repo"
+          echo "  archive_url: $archive_url"
+          echo "  web_url_fallback: $web_url_fallback"
 
       - name: Set up JDK 11
         uses: actions/setup-java@v4
@@ -61,18 +109,18 @@ jobs:
           mkdir -p app/src/main/assets/web
 
           # Case 1: Download from Git repo release
-          if [ -n "${{ github.event.inputs.git_repo }}" ]; then
-            echo "Downloading latest release from ${{ github.event.inputs.git_repo }}..."
+          if [ -n "${{ env.git_repo }}" ]; then
+            echo "Downloading latest release from ${{ env.git_repo }}..."
             
             # Extract repo owner and name from URL
-            REPO=$(echo ${{ github.event.inputs.git_repo }} | sed -E 's|https://([^/]+)/(.*)|\1/\2|' | sed 's|\.git$||')
+            REPO=$(echo ${{ env.git_repo }} | sed -E 's|https://([^/]+)/(.*)|\1/\2|' | sed 's|\.git$||')
             OWNER=$(echo $REPO | cut -d'/' -f1)
             NAME=$(echo $REPO | cut -d'/' -f2)
             
             echo "Repo: $OWNER/$NAME"
             
             # Get latest release
-            if echo ${{ github.event.inputs.git_repo }} | grep -q "github.com"; then
+            if echo ${{ env.git_repo }} | grep -q "github.com"; then
               # GitHub API: get latest release
               curl -s "https://api.github.com/repos/$OWNER/$NAME/releases/latest" > latest_release.json
               LATEST_VERSION=$(jq -r '.tag_name' latest_release.json | sed 's/^v//')
@@ -98,7 +146,7 @@ jobs:
               echo "Existing builds with same version: $EXISTING_COUNT"
               echo "New version: $FINAL_VERSION"
               
-            elif echo ${{ github.event.inputs.git_repo }} | grep -q "gitlab.com"; then
+            elif echo ${{ env.git_repo }} | grep -q "gitlab.com"; then
               # GitLab API: get latest release
               curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > latest_releases.json
               
@@ -138,9 +186,9 @@ jobs:
           fi
 
           # Case 2: Download from direct URL
-          if [ -n "${{ github.event.inputs.archive_url }}" ]; then
-            echo "Downloading archive from ${{ github.event.inputs.archive_url }}..."
-            curl -sL "${{ github.event.inputs.archive_url }}" -o web-archive.zip
+          if [ -n "${{ env.archive_url }}" ]; then
+            echo "Downloading archive from ${{ env.archive_url }}..."
+            curl -sL "${{ env.archive_url }}" -o web-archive.zip
           fi
 
           # Extract archive to assets
@@ -163,7 +211,7 @@ jobs:
               # git_repo was used: use computed version
               VERSION_NAME=$(cat version_name.txt)
               echo "Using computed version from git repo: $VERSION_NAME"
-            elif [ -n "${{ github.event.inputs.archive_url }}" ]; then
+            elif [ -n "${{ env.archive_url }}" ]; then
               # archive_url was used: fetch latest GitHub release and increment
               echo "Fetching latest GitHub release to compute version..."
               LATEST_TAG=$(curl -s "https://api.github.com/repos/supermamie/tracks-to-pictures-Android/releases/latest" | jq -r '.tag_name')
@@ -190,14 +238,14 @@ jobs:
           sed -i "s/versionName \".*\"/versionName \"${VERSION_NAME}\"/" app/build.gradle
           sed -i "s/versionCode .*/versionCode ${VERSION_CODE}/" app/build.gradle
 
-          # Update web URL if provided
-          if [ -n "${{ github.event.inputs.web_url }}" ]; then
-            WEB_URL="${{ github.event.inputs.web_url }}"
+          # Update web URL from metadata file
+          if [ -n "${{ env.web_url_fallback }}" ]; then
+            WEB_URL="${{ env.web_url_fallback }}"
             sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", '${WEB_URL}'/" app/build.gradle
           else
-            # Empty web_url - set about:blank so MainActivity loads error.html
+            # Empty web_url_fallback — set about:blank so MainActivity loads error.html
             sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", 'about:blank'/" app/build.gradle
-            echo "web_url is empty - will load error page instead" >> $GITHUB_STEP_LOG
+            echo "web_url_fallback is empty — will load error page instead" >> $GITHUB_STEP_LOG
           fi
 
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
