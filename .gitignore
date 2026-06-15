@@ -11,13 +11,14 @@ app/build/
 *.iml
 .local/
 
-# Android
+# Android SDK
 local.properties
-.DS_Store
-secrets.properties
 
 # Gradle
 .gradle/
 
 # Generated files
-local.properties
+
+# OS
+.DS_Store
+Thumbs.db
