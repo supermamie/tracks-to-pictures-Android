@@ -10,8 +10,16 @@ on:
         description: "Version name (e.g., 1.0.0)"
         required: false
         default: "1.0.0"
+      git_repo:
+        description: "Git repo URL to fetch latest release from (GitHub/GitLab)"
+        required: false
+        default: ""
+      archive_url:
+        description: "Direct URL to an archive file to download"
+        required: false
+        default: ""
       web_url:
-        description: "Web URL to load (optional)"
+        description: "Fallback web URL if no bundle is provided"
         required: false
         default: "https://mamie-ia.gitlab.io/tracks-to-pictures/"
 
@@ -51,6 +59,52 @@ jobs:
       - name: Create local.properties
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Download and bundle web content
+        run: |
+          mkdir -p app/src/main/assets/web
+
+          # Case 1: Download from Git repo release
+          if [ -n "${{ github.event.inputs.git_repo }}" ]; then
+            echo "Downloading latest release from ${{ github.event.inputs.git_repo }}..."
+            
+            # Extract repo owner and name from URL
+            REPO=$(echo ${{ github.event.inputs.git_repo }} | sed -E 's|https://([^/]+)/(.*)|\\1/\\2|' | sed 's|\.git$||')
+            OWNER=$(echo $REPO | cut -d'/' -f1)
+            NAME=$(echo $REPO | cut -d'/' -f2)
+            
+            echo "Repo: $OWNER/$NAME"
+            
+            # Get latest release (use GitHub API for GitHub repos, GitLab API otherwise)
+            if echo ${{ github.event.inputs.git_repo }} | grep -q "github.com"; then
+              RELEASE_URL=$(curl -s "https://api.github.com/repos/$OWNER/$NAME/releases/latest" | jq -r '.assets[].browser_download_url' | head -1)
+            elif echo ${{ github.event.inputs.git_repo }} | grep -q "gitlab.com"; then
+              # GitLab API
+              RELEASE_URL=$(curl -s "https://gitlab.com/api/v4/projects/${OWNER}_${NAME}/releases" | jq -r '.[0].assets.links[0].direct_asset_url')
+            else
+              echo "Unsupported repo type"
+              exit 1
+            fi
+            
+            echo "Release URL: $RELEASE_URL"
+            curl -sL "$RELEASE_URL" -o web-archive.zip
+          fi
+
+          # Case 2: Download from direct URL
+          if [ -n "${{ github.event.inputs.archive_url }}" ]; then
+            echo "Downloading archive from ${{ github.event.inputs.archive_url }}..."
+            curl -sL "${{ github.event.inputs.archive_url }}" -o web-archive.zip
+          fi
+
+          # Extract archive to assets
+          if [ -f web-archive.zip ]; then
+            echo "Extracting web archive..."
+            unzip -q web-archive.zip -d app/src/main/assets/web/
+            rm web-archive.zip
+          fi
+
+          echo "Assets content:"
+          ls -la app/src/main/assets/web/
 
       - name: Set version
         run: |

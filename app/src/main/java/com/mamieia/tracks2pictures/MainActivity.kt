@@ -1,46 +1,42 @@
 package com.mamieia.tracks2pictures
 
 import android.os.Bundle
-import android.view.KeyEvent
-import android.view.View
-import android.view.WindowManager
-import android.webkit.WebSettings
+import android.util.Log
+import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
-import com.mamieia.tracks2pictures.BuildConfig
 
 class MainActivity : AppCompatActivity() {
-
-    private lateinit var webView: WebView
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
-        webView = findViewById(R.id.webview)
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            loadWithOverviewMode = true
-            useWideScreenViewport = true
+        
+        val webView = findViewById<WebView>(R.id.webview)
+        webView.settings.javaScriptEnabled = true
+        webView.webViewClient = WebViewClient()
+        webView.settings.domStorageEnabled = true
+        webView.settings.setGeolocationEnabled(true)
+        webView.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        
+        // Try to load local bundle first (for offline use)
+        val localUrl = "file:///android_asset/web/index.html"
+        if (tryLoadAsset(webView, "web/index.html")) {
+            webView.loadUrl(localUrl)
+        } else {
+            // Fallback to remote URL
+            webView.loadUrl(BuildConfig.WEB_URL)
+            Log.w("MainActivity", "No local bundle found, loading remote URL: ${BuildConfig.WEB_URL}")
         }
-
-        webView.overScrollMode = View.OVER_SCROLL_NEVER
-        webView.setWebViewClient(WebViewClient())
-
-        webView.settings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.SINGLE_COLUMN)
-        webView.settings.setAppCacheEnabled(false)
-
-        webView.loadUrl(BuildConfig.WEB_URL)
-
-        window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
     }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
-            webView.goBack()
-            return true
+    
+    private fun tryLoadAsset(webView: WebView, assetPath: String): Boolean {
+        return try {
+            val inputStream = assets.open(assetPath)
+            inputStream.close()
+            true
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to load asset: $assetPath", e)
+            false
         }
-        return super.onKeyDown(keyCode, event)
     }
 }
