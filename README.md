@@ -2,34 +2,37 @@
 
 Android WebView app wrapping [tracks-to-pictures](https://gitlab.com/mamie_ia/tracks-to-pictures).
 
+## Features
+
+- **Offline mode** — Bundles web content inside APK
+- **Geolocation** — Supports device GPS for map positioning
+- **Error page** — Shows friendly error if no web content is configured
+- **Auto-versioning** — Version auto-determined from git releases
+
 ## Build
 
 ### Manual build (GitHub Actions)
 
-1. Go to the **Actions** tab in the repo
-2. Click **Build APK** → **Run workflow**
-3. Configure parameters (version name, web URL)
-4. Click **Run**
+1. Go to **Actions** tab
+2. Click **Build APK**
+3. Click **Run workflow**
+4. Wait for build to complete
+5. Download APK from **Artifacts**
 
-The signed APK is automatically uploaded as a draft to GitHub Releases.
+### Metadata file
 
-### Local build
+All configuration comes from `app-release-metadata.yml`:
 
-```bash
-./gradlew assembleRelease
-```
+| Field | Purpose | Example |
+|-------|---------|---------|
+| `git_repo` | Git repo for content bundling | `https://gitlab.com/mamie_ia/tracks-to-pictures` |
+| `archive_url` | Direct URL to download | `https://example.com/web-archive.zip` |
+| `web_url_fallback` | WebView fallback URL | `""` (empty = error page) |
 
-The signed APK is located in `app/build/outputs/apk/release/`.
+## Contributing
 
-## Signing
+Report issues on [GitLab Issues](https://gitlab.com/mamie_ia/tracks-to-pictures/-/issues).
 
-The public keystore is `app/release-key.keystore`:
+## License
 
-- **Alias:** `trackstopictures`
-- **Passwords:** `android` (store + key)
-- **Validity:** 10,000 days
-
-## Deployment
-
-- **F-Droid:** reproducible build (signature copied from public keystore)
-- **Direct distribution:** the signed APK is available on GitHub Releases
+GPL-3.0-or-later
