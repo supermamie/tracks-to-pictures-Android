@@ -18,10 +18,8 @@ jobs:
 
       - name: Parse metadata file
         run: |
-          # Install Python YAML parser if not available
           pip install pyyaml 2>/dev/null || true
           
-          # Read app-release-metadata.yml and extract values
           python3 << 'PYTHON_SCRIPT'
           import yaml
           
@@ -30,7 +28,6 @@ jobs:
               with open('app-release-metadata.yml', 'r') as f:
                   meta = yaml.safe_load(f)
           except ImportError:
-              # Fallback: simple key=value parser (no nested structures)
               meta = {}
               with open('app-release-metadata.yml', 'r') as f:
                   for line in f:
@@ -42,10 +39,8 @@ jobs:
                           if value and not value.startswith('#'):
                               meta[key] = value
           
-          # Output key=value pairs for shell use
           with open('parsed_meta.txt', 'w') as out:
               for key, value in meta.items():
-                  # Handle None and empty values
                   if value is None:
                       out.write(f'{key}=\n')
                   elif isinstance(value, str) and value == '':
@@ -55,14 +50,13 @@ jobs:
                   elif isinstance(value, (int, float)):
                       out.write(f'{key}={value}\n')
                   elif isinstance(value, list):
-                      out.write(f'{key}={"|".join(str(v) for v in value)}\n')
+                      out.write(f'{key}={{"|".join(str(v) for v in value)}}\n')
                   else:
                       out.write(f'{key}={value}\n')
           PYTHON_SCRIPT
           
-          # Load values into GitHub environment
           while IFS='=' read -r key value; do
-              echo "${key}=${value}" >> $GITHUB_ENV
+              echo "${{key}}=${{value}}" >> $GITHUB_ENV
           done < parsed_meta.txt
           
           echo "Parsed metadata:"
@@ -90,12 +84,9 @@ jobs:
         run: |
           mkdir -p app/src/main/assets/web
 
-          # Case 1: Download from Git repo release
           if [ -n "${{ env.git_repo }}" ]; then
             echo "Downloading latest release from ${{ env.git_repo }}..."
             
-            # Extract repo owner and name from URL
-            # Format: https://github.com/owner/repo.git or https://gitlab.com/owner/repo
             REPO_PATH=$(echo "${{ env.git_repo }}" | sed -E 's|^https://[^/]+/([^/]+)/(.+)$|\1/\2|')
             OWNER=$(echo "$REPO_PATH" | cut -d'/' -f1)
             NAME=$(echo "$REPO_PATH" | cut -d'/' -f2)
@@ -104,13 +95,10 @@ jobs:
             echo "Owner: $OWNER"
             echo "Name: $NAME"
             
-            # Get latest release
             if echo "${{ env.git_repo }}" | grep -q "github.com"; then
-              # GitHub API: get latest release
               echo "Fetching from GitHub API..."
               curl -s "https://api.github.com/repos/$OWNER/$NAME/releases/latest" > latest_release.json
               
-              # Check if response is valid JSON
               if ! jq empty latest_release.json 2>/dev/null; then
                 echo "❌ Invalid JSON from GitHub API"
                 cat latest_release.json
@@ -123,27 +111,22 @@ jobs:
                 exit 1
               fi
               
-              # Get download URL for the first asset
               RELEASE_URL=$(jq -r '.assets[0].browser_download_url' latest_release.json)
               if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then
                 echo "❌ No download URL found in GitHub release"
                 exit 1
               fi
               
-              # Count existing releases with same version prefix (e.g., 1.0.3.1, 1.0.3.2)
               curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > all_releases.json
               
-              # Count tags starting with "v{LATEST_VERSION}." (e.g., v1.0.3.1)
-              FILTER_PREFIX="v${LATEST_VERSION}."
+              FILTER_PREFIX="v${{LATEST_VERSION}}."
               EXISTING_COUNT=$(jq -r --arg fp "$FILTER_PREFIX" \
                 '[.[] | select(.tag_name | startswith($fp))] | length' all_releases.json)
               
-              # First build with this version -> use LATEST_VERSION itself (e.g., 1.0.3)
-              # Subsequent builds -> increment (e.g., 1.0.3.1, 1.0.3.2)
               if [ "$EXISTING_COUNT" -eq 0 ]; then
-                  FINAL_VERSION="${LATEST_VERSION}"
+                  FINAL_VERSION="${{LATEST_VERSION}}"
               else
-                  FINAL_VERSION="${LATEST_VERSION}.${EXISTING_COUNT}"
+                  FINAL_VERSION="${{LATEST_VERSION}}.${{EXISTING_COUNT}}"
               fi
               
               echo "Latest release version: $LATEST_VERSION"
@@ -151,47 +134,38 @@ jobs:
               echo "New version: $FINAL_VERSION"
               
             elif echo "${{ env.git_repo }}" | grep -q "gitlab.com"; then
-              # GitLab API: get latest release
               echo "Fetching from GitLab API..."
               
-              # GitLab API: get releases sorted by date (most recent first)
-              curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > gitlab_releases.json
+              curl -s "https://gitlab.com/api/v4/projects/${{OWNER}}%2F${{NAME}}/releases" > gitlab_releases.json
               
-              # Check if response is valid JSON
               if ! jq empty gitlab_releases.json 2>/dev/null; then
                 echo "❌ Invalid JSON from GitLab API"
                 cat gitlab_releases.json
                 exit 1
               fi
               
-              # Get the first (most recent) release
               LATEST_VERSION=$(jq -r '.[0].tag_name // empty' gitlab_releases.json)
               if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
                 echo "❌ No version found in GitLab releases"
                 exit 1
               fi
               
-              # Get download URL for the first asset (GitLab stores URLs in assets.sources)
               RELEASE_URL=$(jq -r '.[0].assets.sources[0].url // empty' gitlab_releases.json)
               if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then
                 echo "❌ No download URL found in GitLab release"
                 exit 1
               fi
               
-              # Count existing releases with same version prefix (e.g., 1.0.3.1, 1.0.3.2)
-              curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > gitlab_releases_count.json
+              curl -s "https://gitlab.com/api/v4/projects/${{OWNER}}%2F${{NAME}}/releases" > gitlab_releases_count.json
               
-              # Count tags starting with "v{LATEST_VERSION}." (e.g., v1.0.3.1)
-              FILTER_PREFIX="v${LATEST_VERSION}."
+              FILTER_PREFIX="v${{LATEST_VERSION}}."
               EXISTING_COUNT=$(jq -r --arg fp "$FILTER_PREFIX" \
                 '[.[] | select(.tag_name | startswith($fp))] | length' gitlab_releases_count.json)
               
-              # First build with this version -> use LATEST_VERSION itself (e.g., 1.0.3)
-              # Subsequent builds -> increment (e.g., 1.0.3.1, 1.0.3.2)
               if [ "$EXISTING_COUNT" -eq 0 ]; then
-                  FINAL_VERSION="${LATEST_VERSION}"
+                  FINAL_VERSION="${{LATEST_VERSION}}"
               else
-                  FINAL_VERSION="${LATEST_VERSION}.${EXISTING_COUNT}"
+                  FINAL_VERSION="${{LATEST_VERSION}}.${{EXISTING_COUNT}}"
               fi
               
               echo "Latest release version: $LATEST_VERSION"
@@ -203,20 +177,17 @@ jobs:
               exit 1
             fi
             
-            # Save final version to file (persists between steps)
             echo "$FINAL_VERSION" > version_name.txt
             
             echo "Release URL: $RELEASE_URL"
             curl -sL "$RELEASE_URL" -o web-archive.zip
           fi
 
-          # Case 2: Download from direct URL
           if [ -n "${{ env.archive_url }}" ]; then
             echo "Downloading archive from ${{ env.archive_url }}..."
             curl -sL "${{ env.archive_url }}" -o web-archive.zip
           fi
 
-          # Extract archive to assets
           if [ -f web-archive.zip ]; then
             echo "Extracting web archive..."
             unzip -q web-archive.zip -d app/src/main/assets/web/
@@ -230,14 +201,11 @@ jobs:
         run: |
           VERSION_NAME=""
           
-          # Auto-determine version if not provided
           if [ -z "$VERSION_NAME" ]; then
             if [ -f version_name.txt ]; then
-              # git_repo was used: use computed version
               VERSION_NAME=$(cat version_name.txt)
               echo "Using computed version from git repo: $VERSION_NAME"
             elif [ -n "${{ env.archive_url }}" ]; then
-              # archive_url was used: fetch latest GitHub release and increment
               echo "Fetching latest GitHub release to compute version..."
               LATEST_TAG=$(curl -s "https://api.github.com/repos/supermamie/tracks-to-pictures-Android/releases/latest" | jq -r '.tag_name')
               
@@ -246,7 +214,6 @@ jobs:
                 echo "No existing releases, starting with $VERSION_NAME"
               else
                 LAST_VERSION=$(echo $LATEST_TAG | sed 's/^v//')
-                # Increment the last segment (e.g., 1.0.3.2 -> 1.0.3.3)
                 VERSION_NAME=$(echo $LAST_VERSION | awk -F. '{printf "%d.%d.%d", $1, $2, $3+1}')
                 echo "Incremented from $LAST_VERSION to $VERSION_NAME"
               fi
@@ -256,7 +223,6 @@ jobs:
             fi
           fi
           
-          # Increment version_code based on git history
           VERSION_CODE=$(( $(git rev-list --count HEAD) + 1000 ))
 
           # Update build.gradle with new version
@@ -266,40 +232,32 @@ jobs:
           # Update web URL from metadata file
           if [ -n "${{ env.web_url_fallback }}" ]; then
             WEB_URL="${{ env.web_url_fallback }}"
-            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", '${WEB_URL}'/" app/build.gradle
+            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", \"${WEB_URL}\"/" app/build.gradle
           else
             # Empty web_url_fallback — set about:blank so MainActivity loads error.html
-            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", 'about:blank'/" app/build.gradle
+            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", \"about:blank\"/" app/build.gradle
             echo "⚙️  web_url_fallback is empty — will load error page instead"
           fi
 
-          echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
-          echo "VERSION_CODE=${VERSION_CODE}" >> $GITHUB_ENV
+          echo "VERSION_NAME=${{VERSION_NAME}}" >> $GITHUB_ENV
+          echo "VERSION_CODE=${{VERSION_CODE}}" >> $GITHUB_ENV
 
       - name: Verify package name consistency
         run: |
-          # Define the correct package name from metadata
           PKG_NAME="${{ env.package_name }}"
-          
-          # Pattern to search for (any variation of com.mamie...tracks2pictures)
-          # We want to ensure ALL files use the EXACT package_name from metadata
           
           echo "Expected package name: $PKG_NAME"
           
-          # Search for incorrect package names in source files
-          # Skip build/ and .gradle/ cache directories
           echo "Searching for incorrect package names..."
           for file in $(find app/src -type f \( -name "*.kt" -o -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) ! -path "*/build/*"); do
-            # Check if file contains a package pattern but NOT the correct one
-            if grep -q "com\.mamie.*tracks2pictures" "$file" && ! grep -q "^package ${PKG_NAME}$" "$file" && ! grep -q "namespace '${PKG_NAME}'" "$file" && ! grep -q "applicationId \"${PKG_NAME}\"" "$file"; then
-              # File has a package pattern but not matching the metadata
+            if grep -q "com\.mamie.*tracks2pictures" "$file" && ! grep -q "^package ${{PKG_NAME}}$" "$file" && ! grep -q "namespace '${{PKG_NAME}}'" "$file" && ! grep -q "applicationId \"${{PKG_NAME}}\"" "$file"; then
               echo "⚠️  Found potential incorrect package in: $file"
               grep "com\.mamie.*tracks2pictures" "$file" | head -3
             fi
           done
           
-          # Also check for any hardcoded package names in comments/docs
-          for file in $(find . -type f \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" \) -not -path "./app-release-metadata.yml"); do
+          # Exclude build.yml itself (contains the grep pattern)
+          for file in $(find . -type f \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" \) -not -path "./app-release-metadata.yml" -not -name "build.yml"); do
             if grep -q "com\.mamieia\.tracks2pictures" "$file"; then
               echo "⚠️  Found old package name 'com.mamieia.tracks2pictures' in: $file"
             fi
@@ -307,10 +265,8 @@ jobs:
           
           echo "Package name consistency check complete."
           
-          # Verify no old package name remains
           if grep -r "com\.mamieia\.tracks2pictures" app/src/ app/build.gradle 2>/dev/null; then
             echo "❌ ERROR: Old package name 'com.mamieia.tracks2pictures' still present!"
-            echo "Please update app-release-metadata.yml and all source files."
             exit 1
           fi
           
