@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Outer circle -->
+    <path
+        android:fillColor="#00D4FF"
+        android:fillAlpha="0.15"
+        android:strokeColor="#00D4FF"
+        android:strokeWidth="2"
+        android:pathData="M24,2 C2,2 2,46 24,46 46,46 46,2 24,2"/>
+
+    <!-- Inner circle -->
+    <path
+        android:strokeColor="#00D4FF"
+        android:strokeWidth="1"
+        android:strokeAlpha="0.5"
+        android:pathData="M24,8 C11.05,8 8,11.05 8,24 8,36.95 11.05,40 24,40 36.95,40 40,36.95 40,24 40,11.05 36.95,8 24,8"/>
+
+    <!-- Wave line -->
+    <path
+        android:strokeColor="#00D4FF"
+        android:strokeWidth="2.5"
+        android:pathData="M10,24 Q18,10 28,20 Q38,30 42,18"/>
+
+    <!-- Red dot (left) -->
+    <path
+        android:fillColor="#FF6B6B"
+        android:pathData="M10,24 C7.79,24 6,25.79 6,28 6,30.21 7.79,32 10,32 12.21,32 14,30.21 14,28 14,25.79 12.21,24 10,24"/>
+
+    <!-- Green dot (right) -->
+    <path
+        android:fillColor="#22C55E"
+        android:pathData="M42,18 C39.79,18 38,19.79 38,22 38,24.21 39.79,26 42,26 44.21,26 46,24.21 46,22 46,19.79 44.21,18 42,18"/>
+
+</vector>
