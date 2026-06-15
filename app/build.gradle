@@ -20,7 +20,7 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
-        buildConfigField "String", "WEB_URL", '"https://mamie-ia.gitlab.io/tracks-to-pictures/"'
+        buildConfigField "String", "WEB_URL", "'about:blank'"
     }
 
     signingConfigs {

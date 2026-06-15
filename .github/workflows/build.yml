@@ -17,7 +17,7 @@ on:
       web_url:
         description: "Fallback web URL if no bundle is provided (leave empty for error page)"
         required: false
-        default: "https://mamie-ia.gitlab.io/tracks-to-pictures/"
+        default: ""
 
 jobs:
   build:
