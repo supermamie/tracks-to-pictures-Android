@@ -1,6 +1,6 @@
-package com.mamieia.tracks2pictures
+package com.mamie.ia.tracks2pictures
 
-import android.os.Bundle
+import android.Manifest
 import android.util.Log
 import android.webkit.WebView
 import android.webkit.WebViewClient

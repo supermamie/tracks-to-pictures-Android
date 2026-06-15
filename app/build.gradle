@@ -7,7 +7,7 @@ plugins {
 def keystoreFile = file("release-key.keystore")
 
 android {
-    namespace 'com.mamieia.tracks2pictures'
+    namespace 'com.mamie.ia.tracks2pictures'
     compileSdk 34
 
     buildFeatures {
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.mamieia.tracks2pictures"
+        applicationId "com.mamie.ia.tracks2pictures"
         minSdk 24
         targetSdk 34
         versionCode 1
