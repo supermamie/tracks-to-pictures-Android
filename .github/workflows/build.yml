@@ -69,7 +69,7 @@ jobs:
             echo "Downloading latest release from ${{ github.event.inputs.git_repo }}..."
             
             # Extract repo owner and name from URL
-            REPO=$(echo ${{ github.event.inputs.git_repo }} | sed -E 's|https://([^/]+)/(.*)|\\1/\\2|' | sed 's|\.git$||')
+            REPO=$(echo ${{ github.event.inputs.git_repo }} | sed -E 's|https://([^/]+)/(.*)|\1/\2|' | sed 's|\.git$||')
             OWNER=$(echo $REPO | cut -d'/' -f1)
             NAME=$(echo $REPO | cut -d'/' -f2)
             
@@ -82,12 +82,18 @@ jobs:
               LATEST_VERSION=$(jq -r '.tag_name' latest_release.json | sed 's/^v//')
               RELEASE_URL=$(jq -r '.assets[].browser_download_url' latest_release.json | head -1)
               
-              # Count existing releases with same version prefix
+              # Count existing releases with same version prefix (e.g., 1.0.3.1, 1.0.3.2)
               curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > all_releases.json
               
-              EXISTING_COUNT=$(jq -r '[.[] | select(.tag_name | startswith("v" + "${LATEST_VERSION}."))] | length' all_releases.json)
-              NEW_COUNTER=$((EXISTING_COUNT + 1))
-              FINAL_VERSION="${LATEST_VERSION}.${NEW_COUNTER}"
+              EXISTING_COUNT=$(jq -r '[.[] | select(.tag_name | startswith("v${LATEST_VERSION}.\"))] | length' all_releases.json)
+              
+              # First build with this version → use LATEST_VERSION itself (e.g., 1.0.3)
+              # Subsequent builds → increment (e.g., 1.0.3.1, 1.0.3.2)
+              if [ "$EXISTING_COUNT" -eq 0 ]; then
+                  FINAL_VERSION="${LATEST_VERSION}"
+              else
+                  FINAL_VERSION="${LATEST_VERSION}.${EXISTING_COUNT}"
+              fi
               
               echo "Latest release version: $LATEST_VERSION"
               echo "Existing builds with same version: $EXISTING_COUNT"
@@ -100,9 +106,18 @@ jobs:
               LATEST_VERSION=$(jq -r '.[0].tag_name // empty' latest_releases.json)
               RELEASE_URL=$(jq -r '.[0].assets.links[0].direct_asset_url' latest_releases.json)
               
-              EXISTING_COUNT=$(jq -r '[.[] | select(.tag_name | startswith("${LATEST_VERSION}."))] | length' latest_releases.json)
-              NEW_COUNTER=$((EXISTING_COUNT + 1))
-              FINAL_VERSION="${LATEST_VERSION}.${NEW_COUNTER}"
+              # Count existing releases with same version prefix (e.g., 1.0.3.1, 1.0.3.2)
+              curl -s "https://gitlab.com/api/v4/projects/${OWNER}%2F${NAME}/releases" > all_releases.json
+              
+              EXISTING_COUNT=$(jq -r '[.[] | select(.tag_name | startswith("v${LATEST_VERSION}.\"))] | length' all_releases.json)
+              
+              # First build with this version → use LATEST_VERSION itself (e.g., 1.0.3)
+              # Subsequent builds → increment (e.g., 1.0.3.1, 1.0.3.2)
+              if [ "$EXISTING_COUNT" -eq 0 ]; then
+                  FINAL_VERSION="${LATEST_VERSION}"
+              else
+                  FINAL_VERSION="${LATEST_VERSION}.${EXISTING_COUNT}"
+              fi
               
               echo "Latest release version: $LATEST_VERSION"
               echo "Existing builds with same version: $EXISTING_COUNT"
@@ -158,10 +173,10 @@ jobs:
           # Update web URL if provided
           if [ -n "${{ github.event.inputs.web_url }}" ]; then
             WEB_URL="${{ github.event.inputs.web_url }}"
-            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", '\"${WEB_URL}\"'/" app/build.gradle
+            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", '${WEB_URL}'/" app/build.gradle
           else
             # Empty web_url — set about:blank so MainActivity loads error.html
-            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", '\"about:blank\"'/" app/build.gradle
+            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", 'about:blank'/" app/build.gradle
             echo "web_url is empty — will load error page instead" >> $GITHUB_STEP_LOG
           fi
 
