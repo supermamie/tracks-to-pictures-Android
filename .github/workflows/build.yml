@@ -6,20 +6,16 @@ name: Build APK
 on:
   workflow_dispatch:
     inputs:
-      version_name:
-        description: "Version name (e.g., 1.0.0). If git_repo is provided, uses latest release version + counter."
-        required: false
-        default: "1.0.0"
       git_repo:
-        description: "Git repo URL to fetch latest release from (GitHub/GitLab)"
+        description: "Git repo URL to fetch latest release from (GitHub/GitLab) — version auto-determined"
         required: false
         default: ""
       archive_url:
-        description: "Direct URL to an archive file to download"
+        description: "Direct URL to an archive file to download — version auto-incremented from last release"
         required: false
         default: ""
       web_url:
-        description: "Fallback web URL if no bundle is provided"
+        description: "Fallback web URL if no bundle is provided (leave empty for error page)"
         required: false
         default: "https://mamie-ia.gitlab.io/tracks-to-pictures/"
 
@@ -86,7 +82,6 @@ jobs:
               curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > all_releases.json
               
               # Count tags starting with "v{LATEST_VERSION}." (e.g., v1.0.3.1)
-              # Using shell variable directly (not in single quotes)
               FILTER_PREFIX="v${LATEST_VERSION}."
               EXISTING_COUNT=$(jq -r --arg fp "$FILTER_PREFIX" \
                 '[.[] | select(.tag_name | startswith($fp))] | length' all_releases.json)
@@ -160,13 +155,31 @@ jobs:
 
       - name: Set version
         run: |
-          VERSION_NAME="${{ github.event.inputs.version_name }}"
+          VERSION_NAME=""
           
-          # If git_repo was provided and no explicit version_name, use computed version
-          if [ -n "${{ github.event.inputs.git_repo }}" ] && [ -z "${{ github.event.inputs.version_name }}" ]; then
+          # Auto-determine version if not provided
+          if [ -z "$VERSION_NAME" ]; then
             if [ -f version_name.txt ]; then
+              # git_repo was used: use computed version
               VERSION_NAME=$(cat version_name.txt)
               echo "Using computed version from git repo: $VERSION_NAME"
+            elif [ -n "${{ github.event.inputs.archive_url }}" ]; then
+              # archive_url was used: fetch latest GitHub release and increment
+              echo "Fetching latest GitHub release to compute version..."
+              LATEST_TAG=$(curl -s "https://api.github.com/repos/supermamie/tracks-to-pictures-Android/releases/latest" | jq -r '.tag_name')
+              
+              if [ "$LATEST_TAG" = "null" ] || [ -z "$LATEST_TAG" ]; then
+                VERSION_NAME="1.0.0"
+                echo "No existing releases, starting with $VERSION_NAME"
+              else
+                LAST_VERSION=$(echo $LATEST_TAG | sed 's/^v//')
+                # Increment the last segment (e.g., 1.0.3.2 -> 1.0.3.3)
+                VERSION_NAME=$(echo $LAST_VERSION | awk -F. '{printf "%d.%d.%d", $1, $2, $3+1}')
+                echo "Incremented from $LAST_VERSION to $VERSION_NAME"
+              fi
+            else
+              VERSION_NAME="1.0.0"
+              echo "No git_repo or archive_url, defaulting to $VERSION_NAME"
             fi
           fi
           
