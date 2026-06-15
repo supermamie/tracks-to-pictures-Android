@@ -1,4 +1,5 @@
 # .github/workflows/build.yml
+# Build APK — manual trigger only (no auto-trigger on push/PR)
 
 name: Build APK
 
@@ -13,9 +14,6 @@ on:
         description: "Web URL to load (optional)"
         required: false
         default: "https://mamie-ia.gitlab.io/tracks-to-pictures/"
-
-env:
-  ANDROID_BUILD_TOOLS_VERSION: "34.0.0"
 
 jobs:
   build:
@@ -32,6 +30,17 @@ jobs:
           java-version: "11"
           distribution: "temurin"
           cache: gradle
+
+      - name: Set Android SDK
+        run: |
+          mkdir -p $ANDROID_HOME
+          # Download and install required SDK components
+          sdkmanager "platform-tools" "build-tools;34.0.0" > /dev/null
+          sdkmanager "platforms;android-34" > /dev/null
+
+      - name: Create local.properties
+        run: |
+          echo "sdk.dir=${{ env.ANDROID_HOME }}" > local.properties
 
       - name: Set version
         run: |
