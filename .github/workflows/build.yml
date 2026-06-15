@@ -77,13 +77,23 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v2
-
-      - name: Install SDK components
+      - name: Install Android SDK
         run: |
-          # Install required SDK components using sdkmanager
-          sdkmanager --install "build-tools;34.0.0" "platforms;android-34"
+          # Set ANDROID_HOME
+          echo "ANDROID_HOME=$HOME/Android/sdk" >> $GITHUB_ENV
+          
+          # Create SDK directory
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          cd $ANDROID_HOME/cmdline-tools
+          
+          # Download SDK command-line tools (r3310547 - latest stable)
+          curl -sL "https://dl.google.com/android/repository/commandlinetools-linux-11079766.zip" -o cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools latest
+          rm cmdline-tools.zip
+          
+          # Install required SDK components
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "build-tools;34.0.0" "platforms;android-34"
 
       - name: Create local.properties
         run: |
