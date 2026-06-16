@@ -1,12 +1,12 @@
 package com.mamie.ia.tracks2pictures
 
 import android.os.Bundle
-import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import java.io.IOException
 import java.io.InputStream
 
 class MainActivity : AppCompatActivity() {
@@ -20,49 +20,46 @@ class MainActivity : AppCompatActivity() {
         webView.settings.setGeolocationEnabled(true)
         webView.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         
-        // Serve translation JSON files directly from assets (bypasses CORS for file:/// mode)
+        // WebViewClient: intercepts all requests and serves from assets/
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
                 view: WebView, request: WebResourceRequest
             ): WebResourceResponse? {
                 val url = request.url.toString()
-                if (url.contains("/android_asset/web/js/translations.")) {
-                    val assetPath = url.replace("file:///android_asset/", "")
-                    try {
-                        val stream: InputStream = assets.open(assetPath)
-                        val mime = "application/json"
-                        return WebResourceResponse(mime, "UTF-8", stream)
-                    } catch (e: Exception) {
-                        Log.w("MainActivity", "Failed to serve $assetPath: ${e.message}")
-                    }
+                
+                // Only intercept file:///android_asset/ URLs (local assets)
+                if (!url.startsWith("file:///android_asset/")) {
+                    return null
                 }
-                return null
+                
+                // Get the relative path from the URL
+                val assetPath = url.substring("file:///android_asset/".length)
+                
+                // Serve the file
+                return try {
+                    val mimeType = when {
+                        assetPath.endsWith(".html") || assetPath.endsWith(".htm") -> "text/html; charset=utf-8"
+                        assetPath.endsWith(".css") -> "text/css; charset=utf-8"
+                        assetPath.endsWith(".js") -> "application/javascript; charset=utf-8"
+                        assetPath.endsWith(".json") -> "application/json; charset=utf-8"
+                        assetPath.endsWith(".svg") -> "image/svg+xml"
+                        assetPath.endsWith(".png") -> "image/png"
+                        assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg") -> "image/jpeg"
+                        assetPath.endsWith(".gif") -> "image/gif"
+                        assetPath.endsWith(".woff") || assetPath.endsWith(".woff2") -> "font/woff"
+                        assetPath.endsWith(".ttf") -> "font/ttf"
+                        else -> "application/octet-stream"
+                    }
+                    
+                    val stream: InputStream = assets.open(assetPath)
+                    WebResourceResponse(mimeType, "UTF-8", stream)
+                } catch (e: IOException) {
+                    null
+                }
             }
         }
         
-        // Try to load local bundle first (for offline use)
-        val localUrl = "file:///android_asset/web/index.html"
-        if (tryLoadAsset("web/index.html")) {
-            webView.loadUrl(localUrl)
-            Log.i("MainActivity", "Loading local: $localUrl")
-        } else {
-            if (BuildConfig.WEB_URL == "about:blank") {
-                webView.loadUrl("file:///android_asset/error.html")
-                Log.w("MainActivity", "No web URL configured, loading error page")
-            } else {
-                webView.loadUrl(BuildConfig.WEB_URL)
-                Log.w("MainActivity", "Loading remote: ${BuildConfig.WEB_URL}")
-            }
-        }
-    }
-    
-    private fun tryLoadAsset(assetPath: String): Boolean {
-        return try {
-            assets.open(assetPath).close()
-            true
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Asset not found: $assetPath")
-            false
-        }
+        // Load index.html from assets
+        webView.loadUrl("file:///android_asset/web/index.html")
     }
 }

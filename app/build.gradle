@@ -19,7 +19,7 @@ android {
         applicationId "com.mamie.ia.tracks2pictures"
         minSdk 24
         targetSdk 34
-        versionCode 1
+        versionCode 1002
         versionName "1.0"
         buildConfigField "String", "WEB_URL", "\"about:blank\""
     }
@@ -60,4 +60,5 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.webkit:webkit:1.7.0'
 }
