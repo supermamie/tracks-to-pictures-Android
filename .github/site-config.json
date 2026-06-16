@@ -1,6 +1,1 @@
-{
-  "source": {
-    "host": "gitlab.com",
-    "repo": "mamie_ia/tracks-to-pictures"
-  }
-}
+{ "source": { "host": "gitlab.com", "repo": "mamie_ia/tracks-to-pictures" } }
