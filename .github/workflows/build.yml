@@ -285,9 +285,13 @@ jobs:
           apk=app/build/outputs/apk/release/app-release.apk
           tag="v${{ env.VERSION_NAME }}"
           gh release create "$tag" "$apk" --title "$tag" --draft
-          if [ -f web-source.zip ]; then
-            gh release upload "$tag" web-source.zip
-            echo "✅ Added web-source.zip to release"
-          else
-            echo "⚠️ No web-source.zip found — skipped"
+          # Create Android source archive
+          echo "Creating Android source archive..."
+          cd app/src/main
+          zip -r ../../android-src.zip java/ res/ AndroidManifest.xml
+          cd ../../..
+
+          if [ -f android-src.zip ]; then
+            gh release upload "$tag" android-src.zip
+            echo "OK Added android-src.zip to release"
           fi
