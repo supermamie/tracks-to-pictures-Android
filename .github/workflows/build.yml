@@ -33,119 +33,55 @@ jobs:
         run: |
           mkdir -p android/build
           
-          # Read site config from app-release-metadata.yml
-          GIT_REPO=$(grep '^git_repo:' android/app-release-metadata.yml | sed 's/.*: *//;s/"//g')
+          # Parse git_repo URL using Python script
+          python3 .github/scripts/parse_git_repo.py android/app-release-metadata.yml android/.github/site-config.json > android/build/parse.txt
           
-          if [ -z "$GIT_REPO" ] || [ "$GIT_REPO" = "" ]; then
-            echo "⚠️ No git_repo in app-release-metadata.yml — using site-config.json"
-            git_repo=$(cat android/.github/site-config.json | jq -r 'if .source | type == "string" then .source else (if .source.host == "github.com" then "https://github.com/" + .source.repo else "https://" + .source.host + "/" + .source.repo end) end')
-          else
-            git_repo="$GIT_REPO"
-          fi
+          # Read parsed values
+          PLATFORM=$(grep '^platform=' android/build/parse.txt | cut -d= -f2)
+          REPO=$(grep '^repo=' android/build/parse.txt | cut -d= -f2)
+          GIT_REPO=$(grep '^git_repo=' android/build/parse.txt | cut -d= -f2)
           
-          echo "git_repo: $git_repo"
+          echo "parsed: $GIT_REPO → platform=$PLATFORM, repo=$REPO"
           
-          # Parse the URL to detect platform
-          if echo "$git_repo" | grep -q "github.com"; then
+          if [ "$PLATFORM" = "github" ]; then
             echo "=== GitHub mode ==="
-            
-            # Extract repo path from URL
-            REPO=$(echo "$git_repo" | sed 's|https://github.com/||;s|/.git||;s|/$||')
-            
             # Get latest release
             curl -sfL "https://api.github.com/repos/$REPO/releases" -o android/build/releases.json || { echo "❌ Failed to fetch GitHub releases"; exit 1; }
-            
-            # Extract latest tag (v prefix)
             LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.published_at) | .[-1].tag_name' android/build/releases.json | sed 's/^v//')
-            
-            if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-              echo "❌ No GitHub releases found"
-              exit 1
-            fi
-            
+            if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then echo "❌ No GitHub releases found"; exit 1; fi
             echo "Latest GitHub release: $LATEST_TAG"
             
-            # Count incrementals (v1.0.7.1, v1.0.7.2, etc.)
-            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" \
-              '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
+            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
+            if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG"; fi
             
-            if [ "$INCREMENTAL_COUNT" -gt 0 ]; then
-              BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"
-            else
-              BUILD_VERSION="$LATEST_TAG"
-            fi
-            
-            echo "Build version: $BUILD_VERSION"
-            echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
-            
-            # Download archive
             ARCHIVE_URL="https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.zip"
-            echo "Downloading: $ARCHIVE_URL"
             curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
             
-          elif echo "$git_repo" | grep -q "gitlab.com"; then
+          elif [ "$PLATFORM" = "gitlab" ]; then
             echo "=== GitLab mode ==="
-            
-            # Extract repo path from URL
-            REPO=$(echo "$git_repo" | sed 's|https://gitlab.com/||;s|/.git||;s|/$||')
-            
-            # API needs / encoded as %2F
             API_REPO=$(echo "$REPO" | sed 's|/|%2F|g')
-            
-            # Get latest release
             curl -sfL "https://gitlab.com/api/v4/projects/$API_REPO/releases" -o android/build/releases.json || { echo "❌ Failed to fetch GitLab releases"; exit 1; }
-            
-            # Extract latest tag (v prefix)
             LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json | sed 's/^v//')
-            
-            if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-              echo "❌ No GitLab releases found"
-              exit 1
-            fi
-            
+            if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then echo "❌ No GitLab releases found"; exit 1; fi
             echo "Latest GitLab release: $LATEST_TAG"
             
-            # Count incrementals
-            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" \
-              '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
+            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
+            if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG"; fi
             
-            if [ "$INCREMENTAL_COUNT" -gt 0 ]; then
-              BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"
-            else
-              BUILD_VERSION="$LATEST_TAG"
-            fi
-            
-            echo "Build version: $BUILD_VERSION"
-            echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
-            
-            # Download archive (URL uses / not %2F)
             ARCHIVE_URL="https://gitlab.com/$REPO/-/archive/$LATEST_TAG/$REPO-$LATEST_TAG.zip"
             echo "Downloading: $ARCHIVE_URL"
             curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
             
-          elif echo "$git_repo" | grep -q "git."; then
-            # Generic GitLab/Gitea/etc. — use direct URL approach
-            echo "=== Generic Git mode ==="
-            ARCHIVE_URL="https://$git_repo/-/archive/$git_repo.zip"
-            echo "Downloading: $ARCHIVE_URL"
-            curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
-            BUILD_VERSION="1.0.0"
-            echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
-            
           else
-            # Fallback: treat as direct URL
             echo "=== Direct URL mode ==="
-            curl -sfL -o android/build/web-source.zip "$git_repo"
+            curl -sfL -o android/build/web-source.zip "$GIT_REPO"
             BUILD_VERSION="1.0.0"
-            echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
           fi
           
           # Verify download
-          if [ ! -s android/build/web-source.zip ]; then
-            echo "❌ Download failed — empty file"
-            exit 1
-          fi
+          if [ ! -s android/build/web-source.zip ]; then echo "❌ Download failed — empty file"; exit 1; fi
           echo "✅ Downloaded: $(du -b android/build/web-source.zip | cut -f1) bytes"
+          echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
 
       - name: Fix web structure
         run: |
@@ -167,16 +103,11 @@ jobs:
           apk=app/build/outputs/apk/release/app-release.apk
           tag="v${{ env.VERSION_NAME }}"
           
-          # Create Android source archive
           echo "Creating Android source archive..."
           cd app/src/main
           zip -r ../../android-src.zip java/ res/ AndroidManifest.xml
           cd ../../..
           
           gh release create "$tag" "$apk" --title "$tag" --draft
-          if [ -f web-source.zip ]; then
-            gh release upload "$tag" web-source.zip
-          fi
-          if [ -f android-src.zip ]; then
-            gh release upload "$tag" android-src.zip
-          fi
+          if [ -f web-source.zip ]; then gh release upload "$tag" web-source.zip; fi
+          if [ -f android-src.zip ]; then gh release upload "$tag" android-src.zip; fi
