@@ -21,7 +21,7 @@ class MainActivity : AppCompatActivity() {
         
         // Try to load local bundle first (for offline use)
         val localUrl = "file:///android_asset/web/index.html"
-        if (tryLoadAsset(webView, "web/index.html")) {
+        if (tryLoadAsset("web/index.html")) {
             webView.loadUrl(localUrl)
         } else {
             // Fallback to remote URL or local error page
@@ -35,7 +35,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun tryLoadAsset(webView: WebView, assetPath: String): Boolean {
+    private fun tryLoadAsset(assetPath: String): Boolean {
         return try {
             val inputStream = assets.open(assetPath)
             inputStream.close()
