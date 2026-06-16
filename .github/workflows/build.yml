@@ -4,24 +4,15 @@
 name: Build and Release Android APK
 on:
   workflow_dispatch:
-    inputs:
-      trigger_prepare:
-        description: 'Trigger prepare step'
-        default: 'false'
-        type: boolean
 
 env:
   OWNER: supermamie
   NAME: tracks-to-pictures-Android
-  git_repo: "https://github.com/supermamie/tracks-to-pictures-Android"
-  gitlab_repo: "https://gitlab.com/mamie_ia/tracks-to-pictures"
-  LATEST_VERSION: ""
-  VERSION_NAME: ""
+  GITLAB_PROJECT: "mamie_ia%2Ftracks-to-pictures"
 
 jobs:
-  prepare:
-    name: Prepare (Manual)
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.trigger_prepare == 'true'
+  build:
+    name: Build APK
     runs-on: ubuntu-latest
     steps:
       - name: Set up JDK 17
@@ -38,148 +29,53 @@ jobs:
           path: android
           fetch-depth: 0
 
-      - name: Checkout GitLab web repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.OWNER }}/tracks-to-pictures-Android
-          ref: main
-          path: android/gitlab-web
-          fetch-depth: 0
-          token: ${{ secrets.GH_TOKEN }}
-
-      - name: Download web archive
+      - name: Download web archive from GitLab
         id: download-web
         run: |
-          cd android/gitlab-web
-          mkdir -p build
-          # Fetch latest web release info
-          curl -s "https://gitlab.com/api/v4/projects/mamie_ia%2Ftracks-to-pictures/releases" > releases.json
+          mkdir -p android/build
+          # Get latest release from GitLab
+          curl -s "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT/releases" > releases.json
+          
           LATEST_TAG=$(jq -r '.[0].tag_name // empty' releases.json)
-          if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "null" ]; then
-            echo "Latest web release: $LATEST_TAG"
-            # Try direct asset download first
-            DOWNLOAD_URL="https://gitlab.com/mamie_ia/tracks-to-pictures/-/releases/$LATEST_TAG/assets/files?direct=true&order_by=updated"
-            echo "Trying direct download: $DOWNLOAD_URL"
-            
-            # Try to get file URLs from the release
-            curl -s "https://gitlab.com/api/v4/projects/mamie_ia%2Ftracks-to-pictures/-/releases/$LATEST_TAG" > release_info.json
-            # Get downloadable URLs
-            FILES=$(jq -r '.assets.sources[].url // empty' release_info.json)
-            
-            if [ -n "$FILES" ]; then
-              for url in $FILES; do
-                echo "Downloading from: $url"
-                FILEPATH="build/$(basename $url)"
-                curl -L -o "$FILEPATH" "$url"
-                if [ -f "$FILEPATH" ] && [ -s "$FILEPATH" ]; then
-                  echo "✅ Downloaded: $FILEPATH ($(du -b "$FILEPATH" | cut -f1) bytes)"
-                  # Check if it's a zip
-                  file_type=$(file --mime-type "$FILEPATH" | awk '{print $2}')
-                  if [[ "$file_type" == *"zip"* ]]; then
-                    echo "File is a zip, renaming to web-source.zip"
-                    mv "$FILEPATH" build/web-source.zip
-                    break
-                  fi
-                fi
-              done
-            fi
-            
-            # If direct download failed, try archive URL
-            if [ ! -f build/web-source.zip ]; then
-              echo "⚠️ Direct download failed — trying archive URL"
-              ARCHIVE_URL="https://gitlab.com/mamie_ia/tracks-to-pictures/-/archive/$LATEST_TAG/tracks-to-pictures-$LATEST_TAG.zip"
-              echo "Trying archive: $ARCHIVE_URL"
-              curl -L -o build/web-source.zip "$ARCHIVE_URL"
-              echo "✅ Downloaded archive: $(du -b build/web-source.zip | cut -f1) bytes"
-              file_type=$(file --mime-type build/web-source.zip | awk '{print $2}')
-              echo "File type: $file_type"
-              unzip -qq build/web-source.zip -d build/web-extracted || echo "⚠️ Archive extraction failed"
-            fi
-          else
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
             echo "❌ No releases found for GitLab repo"
             exit 1
           fi
-
-      - name: Report trigger
-        run: |
-          echo "✅ Prepare complete — trigger build"
-          echo "Web archive downloaded: $(ls -la android/build/web-source.zip 2>/dev/null | awk '{print $5}' || echo '0') bytes"
-          echo "Trigger next job with: gh workflow run build.yml --ref main"
-
-  build:
-    name: Build APK
-    needs: [ prepare ]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Checkout Android repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.OWNER }}/${{ env.NAME }}
-          ref: main
-          path: android
-          fetch-depth: 0
-
-      - name: Download web archive
-        id: download-web
-        run: |
-          cd android
-          mkdir -p build
-          # Download web source
-          echo "Fetching from GitHub API..."
-          curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > releases.json
           
-          # Extract latest version
-          LATEST_VERSION=$(jq -r '[.[] | select(.tag_name | startswith("v"))] | sort_by(.published_at) | .[-1].tag_name // empty' releases.json | sed 's/^v//')
-          if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
-            echo "⚠️ No GitHub releases — building GitLab archive URL..."
-            # Fetch from GitLab for web source
-            curl -s "https://gitlab.com/api/v4/projects/mamie_ia%2Ftracks-to-pictures/releases" > gitlab_releases.json
-            LATEST_VERSION=$(jq -r '.[0].tag_name // empty' gitlab_releases.json | sed 's/^v//')
-            if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
-              echo "❌ No version found"
-              exit 1
-            fi
-            
-            # Count incrementals for version calculation
-            curl -s "https://gitlab.com/api/v4/projects/mamie_ia%2Ftracks-to-pictures/releases" > gitlab_releases_count.json
-            
-            # Count ALL releases matching v$LATEST_VERSION or v$LATEST_VERSION.*
-            ALL_MATCH_COUNT=$(jq -r --arg ver "$LATEST_VERSION" \
-              '[.[] | select(.tag_name == "v" + $ver or .tag_name | startswith("v" + $ver + "."))] | length' gitlab_releases_count.json)
-
-            # Count incrementals (v$LATEST_VERSION.*)
-            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_VERSION" \
-              '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' gitlab_releases_count.json)
-
-            if [ "$INCREMENTAL_COUNT" -eq 0 ]; then
-              FINAL_VERSION="$LATEST_VERSION"
-            else
-              FINAL_VERSION="$LATEST_VERSION.$(( INCREMENTAL_COUNT + 1 ))"
-            fi
-            
-            # Check if this version tag already exists (GitHub API)
-            curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > gh_releases_check.json
-            EXISTING_CHECK=$(jq -r --arg ver "$FINAL_VERSION" \
-              '[.[] | select(.tag_name == "v" + $ver)] | length' gh_releases_check.json)
-            
-            if [ "$EXISTING_CHECK" -gt 0 ]; then
-              FINAL_VERSION="$FINAL_VERSION.1"
-            fi
-            
-            echo "Latest GitLab version: $LATEST_VERSION"
-            echo "All matching count: $ALL_MATCH_COUNT"
-            echo "Incremental count: $INCREMENTAL_COUNT"
-            echo "Existing check: $EXISTING_CHECK"
-            echo "Final version: $FINAL_VERSION"
-            echo "VERSION_NAME=$FINAL_VERSION" >> $GITHUB_ENV
+          echo "Latest GitLab release: $LATEST_TAG"
+          
+          # Count all matching versions for incremental numbering
+          # Use --argjson to safely parse the array
+          ALL_COUNT=$(jq -r --arg ver "$LATEST_TAG" \
+            '[.[] | select(.tag_name == "v" + $ver or .tag_name | startswith("v" + $ver + "."))] | length' releases.json)
+          
+          INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" \
+            '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' releases.json)
+          
+          # Determine the build version
+          if [ "$INCREMENTAL_COUNT" -eq 0 ]; then
+            BUILD_VERSION="$LATEST_TAG"
+          else
+            BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"
           fi
+          
+          # Check if this version already exists in GitHub
+          curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > gh_releases.json
+          EXISTING_CHECK=$(jq -r --arg ver "$BUILD_VERSION" \
+            '[.[] | select(.tag_name == "v" + $ver)] | length' gh_releases.json)
+          
+          if [ "$EXISTING_CHECK" -gt 0 ]; then
+            BUILD_VERSION="$BUILD_VERSION.1"
+          fi
+          
+          echo "Build version: $BUILD_VERSION"
+          echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
+          
+          # Download the web archive from GitLab
+          ARCHIVE_URL="https://gitlab.com/$GITLAB_PROJECT/-/archive/$LATEST_TAG/tracks-to-pictures-$LATEST_TAG.zip"
+          echo "Downloading: $ARCHIVE_URL"
+          curl -L -o android/build/web-source.zip "$ARCHIVE_URL"
+          echo "✅ Downloaded: $(du -b android/build/web-source.zip | cut -f1) bytes"
 
       - name: Build APK
         run: |
@@ -187,7 +83,10 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleRelease
 
-      - name: Create Release
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
         run: |
           cd android
           apk=app/build/outputs/apk/release/app-release.apk
@@ -202,9 +101,7 @@ jobs:
           gh release create "$tag" "$apk" --title "$tag" --draft
           if [ -f web-source.zip ]; then
             gh release upload "$tag" web-source.zip
-            echo "OK Added web-source.zip to release"
           fi
           if [ -f android-src.zip ]; then
             gh release upload "$tag" android-src.zip
-            echo "OK Added android-src.zip to release"
           fi
