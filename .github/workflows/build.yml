@@ -71,6 +71,13 @@ jobs:
           if [ ! -s android/build/web-source.zip ]; then echo "❌ Download failed — empty file"; exit 1; fi
           echo "✅ Downloaded: $(du -b android/build/web-source.zip | cut -f1) bytes"
       
+      - name: Extract web archive
+        run: |
+          cd android
+          cd build
+          unzip -o web-source.zip
+          rm web-source.zip
+      
       - name: Fix web structure
         run: |
           python3 android/.github/scripts/fix_web_structure.py android/build/
@@ -78,11 +85,13 @@ jobs:
       - name: Copy web content to assets
         run: |
           cd android
+          echo "=== Contents of build/ ==="
+          ls -la build/
           rm -rf app/src/main/assets/web
           mkdir -p app/src/main/assets/web
           cp build/index.html app/src/main/assets/web/
-          cp -r build/js build/css build/lib build/fonts app/src/main/assets/web/
-          cp build/favicon.svg build/logo.png app/src/main/assets/web/
+          cp -r build/js build/css build/lib build/fonts app/src/main/assets/web/ 2>/dev/null || true
+          cp build/favicon.svg build/logo.png app/src/main/assets/web/ 2>/dev/null || true
       
       - name: Build version from existing Android releases
         id: version
