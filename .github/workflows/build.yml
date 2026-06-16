@@ -8,8 +8,6 @@ on:
 env:
   OWNER: supermamie
   NAME: tracks-to-pictures-Android
-  # %2F for API calls (encoded /)
-  GITLAB_PROJECT_ID: "200463500"
 
 jobs:
   build:
@@ -35,9 +33,19 @@ jobs:
         run: |
           mkdir -p android/build
           
-          # Download GitLab releases (use project ID, not path)
+          # Load site config from repo
+          SITE_REPO=$(cat android/.github/site-config.json | jq -r '.site_repo')
+          SITE_HOST=$(cat android/.github/site-config.json | jq -r '.site_host')
+          
+          echo "Building URLs from config: $SITE_REPO on $SITE_HOST"
+          
+          # API URL uses path with encoded /
+          API_URL="https://$SITE_HOST/api/v4/projects/$SITE_REPO/releases"
+          echo "API URL: $API_URL"
+          
+          # Download GitLab releases (API needs / encoded as %2F)
           echo "Fetching GitLab releases..."
-          curl -sfL "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/releases" -o android/build/releases.json || { echo "❌ Failed to download releases"; cat android/build/releases.json; exit 1; }
+          curl -sfL "$API_URL" -o android/build/releases.json || { echo "❌ Failed to download releases"; cat android/build/releases.json; exit 1; }
           
           # Extract latest valid release (with non-null tag_name)
           LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null and (.tag_name | type) == "string")] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json)
@@ -67,10 +75,8 @@ jobs:
           echo "Build version: $BUILD_VERSION"
           echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
           
-          # Download the web archive from GitLab (use tag's commit_path to get correct URL)
-          ARCHIVE_URL=$(jq -r --arg ver "$LATEST_TAG" \
-            '[.[] | select(.tag_name == "v" + $ver)] | .[0]._links.archive_zip' android/build/releases.json | tr -d '"')
-          
+          # Download the web archive from GitLab (use / not %2F)
+          ARCHIVE_URL="https://$SITE_HOST/$SITE_REPO/-/archive/$LATEST_TAG/tracks-to-pictures-$LATEST_TAG.zip"
           echo "Downloading: $ARCHIVE_URL"
           curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
           
