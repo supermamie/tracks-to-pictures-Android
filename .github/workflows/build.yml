@@ -138,9 +138,6 @@ jobs:
           zip -r ../../android-src.zip java/ res/ AndroidManifest.xml
           cd ../../..
           
-          # Authenticate with GH_TOKEN
-          echo "$GH_TOKEN" | gh auth login --with-token
-          
           gh release create "$tag" "$apk" --title "$tag" --draft
           if [ -f build/web-source.zip ]; then gh release upload "$tag" build/web-source.zip; fi
           if [ -f android-src.zip ]; then gh release upload "$tag" android-src.zip; fi
