@@ -52,7 +52,7 @@ jobs:
             echo "Latest GitHub release: $LATEST_TAG"
             # Count incrementals (v1.0.7.1, v1.0.7.2, etc.)
             INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
-            if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG"; fi
+            if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG.1"; fi
             echo "Build version: $BUILD_VERSION"
             # GitHub archive uses the tag with 'v'
             curl -sfL "https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.zip" -o android/build/web-source.zip
@@ -68,7 +68,7 @@ jobs:
             echo "Latest GitLab release: $LATEST_TAG"
             # Count incrementals (v1.0.7.1, v1.0.7.2, etc.)
             INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
-            if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG"; fi
+            if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG.1"; fi
             echo "Build version: $BUILD_VERSION"
             # GitLab archive uses the tag with 'v'
             ARCHIVE_URL="https://gitlab.com/$REPO/-/archive/$LATEST_TAG/$REPO-$LATEST_TAG.zip"
@@ -103,7 +103,7 @@ jobs:
         run: |
           cd android
           apk=app/build/outputs/apk/release/app-release.apk
-          tag="v${{ env.VERSION_NAME }}"
+          tag="${{ env.VERSION_NAME }}"
           
           # Create Android source archive
           echo "Creating Android source archive..."
