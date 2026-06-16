@@ -33,24 +33,28 @@ jobs:
         id: download-web
         run: |
           mkdir -p android/build
-          # Get latest release from GitLab
-          curl -s "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT/releases" > releases.json
           
-          LATEST_TAG=$(jq -r '.[0].tag_name // empty' releases.json)
+          # Download GitLab releases
+          echo "Fetching GitLab releases..."
+          curl -sfL "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT/releases" -o android/build/releases.json || { echo "❌ Failed to download releases"; cat android/build/releases.json; exit 1; }
+          
+          # Extract latest valid release (with non-null tag_name)
+          LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null and (.tag_name | type) == "string")] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json)
+          
           if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-            echo "❌ No releases found for GitLab repo"
+            echo "❌ No valid releases found"
+            echo "Releases content: $(cat android/build/releases.json)"
             exit 1
           fi
           
           echo "Latest GitLab release: $LATEST_TAG"
           
           # Count all matching versions for incremental numbering
-          # Use --argjson to safely parse the array
           ALL_COUNT=$(jq -r --arg ver "$LATEST_TAG" \
-            '[.[] | select(.tag_name == "v" + $ver or .tag_name | startswith("v" + $ver + "."))] | length' releases.json)
+            '[.[] | select(.tag_name != null and (.tag_name == "v" + $ver or (.tag_name | startswith("v" + $ver + "."))))] | length' android/build/releases.json)
           
           INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" \
-            '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' releases.json)
+            '[.[] | select(.tag_name != null and (.tag_name | startswith("v" + $ver + ".")))] | length' android/build/releases.json)
           
           # Determine the build version
           if [ "$INCREMENTAL_COUNT" -eq 0 ]; then
@@ -59,23 +63,25 @@ jobs:
             BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"
           fi
           
-          # Check if this version already exists in GitHub
-          curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > gh_releases.json
-          EXISTING_CHECK=$(jq -r --arg ver "$BUILD_VERSION" \
-            '[.[] | select(.tag_name == "v" + $ver)] | length' gh_releases.json)
-          
-          if [ "$EXISTING_CHECK" -gt 0 ]; then
-            BUILD_VERSION="$BUILD_VERSION.1"
-          fi
-          
           echo "Build version: $BUILD_VERSION"
           echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
           
           # Download the web archive from GitLab
           ARCHIVE_URL="https://gitlab.com/$GITLAB_PROJECT/-/archive/$LATEST_TAG/tracks-to-pictures-$LATEST_TAG.zip"
           echo "Downloading: $ARCHIVE_URL"
-          curl -L -o android/build/web-source.zip "$ARCHIVE_URL"
+          curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
+          
+          # Verify download
+          if [ ! -s android/build/web-source.zip ]; then
+            echo "❌ Download failed — empty file"
+            exit 1
+          fi
           echo "✅ Downloaded: $(du -b android/build/web-source.zip | cut -f1) bytes"
+
+      - name: Fix web structure
+        run: |
+          cd android
+          python3 ../.github/scripts/fix_web_structure.py build/
 
       - name: Build APK
         run: |
