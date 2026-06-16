@@ -1,297 +1,213 @@
-# .github/workflows/build.yml
-# Build APK — reads metadata from app-release-metadata.yml
-# No manual inputs needed — version, content, and URLs auto-detected
+# GitHub Workflow — Build and Release Android APK
+# Triggers on workflow_dispatch (manual) and push to main
 
-name: Build APK
-
+name: Build and Release Android APK
 on:
   workflow_dispatch:
+    inputs:
+      trigger_prepare:
+        description: 'Trigger prepare step'
+        default: 'false'
+        type: boolean
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '.github/**'
+
+env:
+  OWNER: supermamie
+  NAME: tracks-to-pictures-Android
+  git_repo: "https://github.com/supermamie/tracks-to-pictures-Android"
+  gitlab_repo: "https://gitlab.com/mamie_ia/tracks-to-pictures"
+  LATEST_VERSION: ""
+  VERSION_NAME: ""
 
 jobs:
-  build:
-    name: Build APK
+  prepare:
+    name: Prepare (Manual)
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.trigger_prepare == 'true'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Parse metadata file
-        run: |
-          pip install pyyaml 2>/dev/null || true
-          
-          python3 << 'PYTHON_SCRIPT'
-          import yaml
-          
-          try:
-              import yaml
-              with open('app-release-metadata.yml', 'r') as f:
-                  meta = yaml.safe_load(f)
-          except ImportError:
-              meta = {}
-              with open('app-release-metadata.yml', 'r') as f:
-                  for line in f:
-                      line = line.strip()
-                      if line and not line.startswith('#') and ':' in line:
-                          key, value = line.split(':', 1)
-                          key = key.strip()
-                          value = value.strip().strip('"').strip("'")
-                          if value and not value.startswith('#'):
-                              meta[key] = value
-          
-          with open('parsed_meta.txt', 'w') as out:
-              for key, value in meta.items():
-                  if value is None:
-                      out.write(f'{key}=\n')
-                  elif isinstance(value, str) and value == '':
-                      out.write(f'{key}=\n')
-                  elif isinstance(value, bool):
-                      out.write(f'{key}={str(value).lower()}\n')
-                  elif isinstance(value, (int, float)):
-                      out.write(f'{key}={value}\n')
-                  elif isinstance(value, list):
-                      out.write(f'{key}={{"|".join(str(v) for v in value)}}\n')
-                  else:
-                      out.write(f'{key}={value}\n')
-          PYTHON_SCRIPT
-          
-          while IFS='=' read -r key value; do
-              echo "$key=$value" >> $GITHUB_ENV
-          done < parsed_meta.txt
-          
-          echo "Parsed metadata:"
-          echo "  git_repo: $git_repo"
-          echo "  archive_url: $archive_url"
-          echo "  web_url_fallback: $web_url_fallback"
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: "17"
-          distribution: "temurin"
-          cache: gradle
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Checkout Android repo
+        uses: actions/checkout@v4
         with:
-          packages: "tools platform-tools platforms;android-34 build-tools;34.0.0"
+          repository: ${{ env.OWNER }}/${{ env.NAME }}
+          ref: main
+          path: android
+          fetch-depth: 0
 
-      - name: Create local.properties
+      - name: Checkout GitLab web repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.OWNER }}/tracks-to-pictures-Android
+          ref: main
+          path: android/gitlab-web
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Download web archive
+        id: download-web
         run: |
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          cd android/gitlab-web
+          mkdir -p build
+          # Fetch latest web release info
+          curl -s "https://gitlab.com/api/v4/projects/mamie_ia%2Ftracks-to-pictures/releases" > releases.json
+          LATEST_TAG=$(jq -r '.[0].tag_name // empty' releases.json)
+          if [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "null" ]; then
+            echo "Latest web release: $LATEST_TAG"
+            # Try direct asset download first
+            DOWNLOAD_URL="https://gitlab.com/mamie_ia/tracks-to-pictures/-/releases/$LATEST_TAG/assets/files?direct=true&order_by=updated"
+            echo "Trying direct download: $DOWNLOAD_URL"
+            
+            # Try to get file URLs from the release
+            curl -s "https://gitlab.com/api/v4/projects/mamie_ia%2Ftracks-to-pictures/-/releases/$LATEST_TAG" > release_info.json
+            # Get downloadable URLs
+            FILES=$(jq -r '.assets.sources[].url // empty' release_info.json)
+            
+            if [ -n "$FILES" ]; then
+              for url in $FILES; do
+                echo "Downloading from: $url"
+                FILEPATH="build/$(basename $url)"
+                curl -L -o "$FILEPATH" "$url"
+                if [ -f "$FILEPATH" ] && [ -s "$FILEPATH" ]; then
+                  echo "✅ Downloaded: $FILEPATH ($(du -b "$FILEPATH" | cut -f1) bytes)"
+                  # Check if it's a zip
+                  file_type=$(file --mime-type "$FILEPATH" | awk '{print $2}')
+                  if [[ "$file_type" == *"zip"* ]]; then
+                    echo "File is a zip, renaming to web-source.zip"
+                    mv "$FILEPATH" build/web-source.zip
+                    break
+                  fi
+                fi
+              done
+            fi
+            
+            # If direct download failed, try archive URL
+            if [ ! -f build/web-source.zip ]; then
+              echo "⚠️ Direct download failed — trying archive URL"
+              ARCHIVE_URL="https://gitlab.com/mamie_ia/tracks-to-pictures/-/archive/$LATEST_TAG/tracks-to-pictures-$LATEST_TAG.zip"
+              echo "Trying archive: $ARCHIVE_URL"
+              curl -L -o build/web-source.zip "$ARCHIVE_URL"
+              echo "✅ Downloaded archive: $(du -b build/web-source.zip | cut -f1) bytes"
+              file_type=$(file --mime-type build/web-source.zip | awk '{print $2}')
+              echo "File type: $file_type"
+              unzip -qq build/web-source.zip -d build/web-extracted || echo "⚠️ Archive extraction failed"
+            fi
+          else
+            echo "❌ No releases found for GitLab repo"
+            exit 1
+          fi
 
-      - name: Download and bundle web content
+      - name: Report trigger
         run: |
-          mkdir -p app/src/main/assets/web
+          echo "✅ Prepare complete — trigger build"
+          echo "Web archive downloaded: $(ls -la android/build/web-source.zip 2>/dev/null | awk '{print $5}' || echo '0') bytes"
+          echo "Trigger next job with: gh workflow run build.yml --ref main"
 
-          if [ -n "${{ env.git_repo }}" ]; then
-            echo "Downloading latest release from ${{ env.git_repo }}..."
-            
-            REPO_PATH=$(echo "${{ env.git_repo }}" | sed -E 's|^https://[^/]+/([^/]+)/(.+)$|\1/\2|')
-            OWNER=$(echo "$REPO_PATH" | cut -d'/' -f1)
-            NAME=$(echo "$REPO_PATH" | cut -d'/' -f2)
-            
-            echo "Repo path: $REPO_PATH"
-            echo "Owner: $OWNER"
-            echo "Name: $NAME"
-            
-            if echo "${{ env.git_repo }}" | grep -q "github.com"; then
-              echo "Fetching from GitHub API..."
-              curl -s "https://api.github.com/repos/$OWNER/$NAME/releases/latest" > latest_release.json
-              
-              if ! jq empty latest_release.json 2>/dev/null; then
-                echo "❌ Invalid JSON from GitHub API"
-                cat latest_release.json
-                exit 1
-              fi
-              
-              LATEST_VERSION=$(jq -r '.tag_name' latest_release.json | sed 's/^v//')
-              if [ "$LATEST_VERSION" = "null" ] || [ -z "$LATEST_VERSION" ]; then
-                echo "❌ No version found in GitHub release"
-                exit 1
-              fi
-              
-              RELEASE_URL=$(jq -r '.assets[0].browser_download_url' latest_release.json)
-              if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then
-                echo "❌ No download URL found in GitHub release"
-                exit 1
-              fi
-              
-              curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > all_releases.json
-              
-              # Count incrementals matching v$LATEST_VERSION.*
-              INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_VERSION" \
-                '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' all_releases.json)
+  build:
+    name: Build APK
+    needs: [ prepare ]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-              if [ "$INCREMENTAL_COUNT" -eq 0 ]; then
-                  FINAL_VERSION="$LATEST_VERSION"
-              else
-                  FINAL_VERSION="$LATEST_VERSION.$(( INCREMENTAL_COUNT + 1 ))"
-              fi
-              
-              echo "Latest release version: $LATEST_VERSION"
-              echo "Existing builds with same version: $EXISTING_COUNT"
-              echo "New version: $FINAL_VERSION"
-              
-            elif echo "${{ env.git_repo }}" | grep -q "gitlab.com"; then
-              echo "Fetching from GitLab API..."
-              
-              curl -s "https://gitlab.com/api/v4/projects/$OWNER%2F$NAME/releases" > gitlab_releases.json
-              
-              if ! jq empty gitlab_releases.json 2>/dev/null; then
-                echo "❌ Invalid JSON from GitLab API"
-                cat gitlab_releases.json
-                exit 1
-              fi
-              
-              LATEST_VERSION=$(jq -r '.[0].tag_name // empty' gitlab_releases.json | sed 's/^v//')
-              if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
-                echo "❌ No version found in GitLab releases"
-                exit 1
-              fi
-              
-              RELEASE_URL=$(jq -r '.[0].assets.sources[0].url // empty' gitlab_releases.json)
-              if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then
-                echo "⚠️ No release assets found — building GitLab archive URL..."
-                # GitLab provides source archives for tags: /-/archive/{tag}.zip
-                RELEASE_URL="https://gitlab.com/mamie_ia/tracks-to-pictures/-/archive/$LATEST_VERSION/tracks-to-pictures-$LATEST_VERSION.zip"
-                echo "  Using: $RELEASE_URL"
-              fi
-              
-              curl -s "https://gitlab.com/api/v4/projects/$OWNER%2F$NAME/releases" > gitlab_releases_count.json
-              
-              # Count incrementals matching v$LATEST_VERSION.*
-              INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_VERSION" \
-                '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' gitlab_releases_count.json)
+      - name: Checkout Android repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.OWNER }}/${{ env.NAME }}
+          ref: main
+          path: android
+          fetch-depth: 0
 
-              if [ "$INCREMENTAL_COUNT" -eq 0 ]; then
-                  FINAL_VERSION="$LATEST_VERSION"
-              else
-                  FINAL_VERSION="$LATEST_VERSION.$(( INCREMENTAL_COUNT + 1 ))"
-              fi
-              
-              echo "Latest release version: $LATEST_VERSION"
-              echo "Existing builds with same version: $EXISTING_COUNT"
-              echo "New version: $FINAL_VERSION"
-              
-            else
-              echo "❌ Unsupported repo type (only github.com and gitlab.com supported)"
+      - name: Download web archive
+        id: download-web
+        run: |
+          cd android
+          mkdir -p build
+          # Download web source
+          echo "Fetching from GitHub API..."
+          curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > releases.json
+          
+          # Extract latest version
+          LATEST_VERSION=$(jq -r '[.[] | select(.tag_name | startswith("v"))] | sort_by(.published_at) | .[-1].tag_name // empty' releases.json | sed 's/^v//')
+          if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
+            echo "⚠️ No GitHub releases — building GitLab archive URL..."
+            # Fetch from GitLab for web source
+            curl -s "https://gitlab.com/api/v4/projects/mamie_ia%2Ftracks-to-pictures/releases" > gitlab_releases.json
+            LATEST_VERSION=$(jq -r '.[0].tag_name // empty' gitlab_releases.json | sed 's/^v//')
+            if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
+              echo "❌ No version found"
               exit 1
             fi
             
-            echo "$FINAL_VERSION" > version_name.txt
+            # Count incrementals for version calculation
+            curl -s "https://gitlab.com/api/v4/projects/mamie_ia%2Ftracks-to-pictures/releases" > gitlab_releases_count.json
             
-            echo "Release URL: $RELEASE_URL"
-            curl -sL "$RELEASE_URL" -o web-archive.zip
-          fi
+            # Count ALL releases matching v$LATEST_VERSION or v$LATEST_VERSION.*
+            ALL_MATCH_COUNT=$(jq -r --arg ver "$LATEST_VERSION" \
+              '[.[] | select(.tag_name == "v" + $ver or .tag_name | startswith("v" + $ver + "."))] | length' gitlab_releases_count.json)
 
-          if [ -n "${{ env.archive_url }}" ]; then
-            echo "Downloading archive from ${{ env.archive_url }}..."
-            curl -sL "${{ env.archive_url }}" -o web-archive.zip
-          fi
+            # Count incrementals (v$LATEST_VERSION.*)
+            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_VERSION" \
+              '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' gitlab_releases_count.json)
 
-          if [ -f web-archive.zip ]; then
-            echo "Extracting web archive..."
-            unzip -q web-archive.zip -d app/src/main/assets/web/
-            python3 .github/scripts/fix_web_structure.py app/src/main/assets/web/
-            python3 .github/scripts/embed_translations.py app/src/main/assets/web/
-            cp web-archive.zip web-source.zip
-            rm web-archive.zip
-          fi
-
-          echo "Assets content:"
-          ls -la app/src/main/assets/web/
-
-      - name: Set version
-        run: |
-          VERSION_NAME=""
-          
-          if [ -z "$VERSION_NAME" ]; then
-            if [ -f version_name.txt ]; then
-              VERSION_NAME=$(cat version_name.txt)
-              echo "Using computed version from git repo: $VERSION_NAME"
-            elif [ -n "${{ env.archive_url }}" ]; then
-              echo "Fetching latest GitHub release to compute version..."
-              LATEST_TAG=$(curl -s "https://api.github.com/repos/supermamie/tracks-to-pictures-Android/releases/latest" | jq -r '.tag_name')
-              
-              if [ "$LATEST_TAG" = "null" ] || [ -z "$LATEST_TAG" ]; then
-                VERSION_NAME="1.0.0"
-                echo "No existing releases, starting with $VERSION_NAME"
-              else
-                LAST_VERSION=$(echo $LATEST_TAG | sed 's/^v//')
-                VERSION_NAME=$(echo $LAST_VERSION | awk -F. '{printf "%d.%d.%d", $1, $2, $3+1}')
-                echo "Incremented from $LAST_VERSION to $VERSION_NAME"
-              fi
+            if [ "$INCREMENTAL_COUNT" -eq 0 ]; then
+              FINAL_VERSION="$LATEST_VERSION"
             else
-              VERSION_NAME="1.0.0"
-              echo "No git_repo or archive_url, defaulting to $VERSION_NAME"
+              FINAL_VERSION="$LATEST_VERSION.$(( INCREMENTAL_COUNT + 1 ))"
             fi
+            
+            # Check if this version tag already exists (GitHub API)
+            curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > gh_releases_check.json
+            EXISTING_CHECK=$(jq -r --arg ver "$FINAL_VERSION" \
+              '[.[] | select(.tag_name == "v" + $ver)] | length' gh_releases_check.json)
+            
+            if [ "$EXISTING_CHECK" -gt 0 ]; then
+              FINAL_VERSION="$FINAL_VERSION.1"
+            fi
+            
+            echo "Latest GitLab version: $LATEST_VERSION"
+            echo "All matching count: $ALL_MATCH_COUNT"
+            echo "Incremental count: $INCREMENTAL_COUNT"
+            echo "Existing check: $EXISTING_CHECK"
+            echo "Final version: $FINAL_VERSION"
+            echo "VERSION_NAME=$FINAL_VERSION" >> $GITHUB_ENV
           fi
-          
-          VERSION_CODE=$(( $(git rev-list --count HEAD) + 1000 ))
 
-          # Update build.gradle with new version and web URL using Python helper
-          python3 .github/scripts/modify_build_gradle.py \
-            "${VERSION_NAME}" \
-            "${VERSION_CODE}" \
-            "${{ env.web_url_fallback }}"
-
-          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
-          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
-
-      - name: Verify package name consistency
-        run: |
-          PKG_NAME="${{ env.package_name }}"
-          
-          echo "Expected package name: $PKG_NAME"
-          
-          echo "Searching for incorrect package names..."
-          for file in $(find app/src -type f \( -name "*.kt" -o -name "*.java" -o -name "*.xml" -o -name "*.gradle" \) ! -path "*/build/*"); do
-            if grep -q "com\.mamie.*tracks2pictures" "$file" && ! grep -q "^package $PKG_NAME$" "$file" && ! grep -q "namespace '$PKG_NAME'" "$file" && ! grep -q "applicationId \"$PKG_NAME\"" "$file"; then
-              echo "⚠️  Found potential incorrect package in: $file"
-              grep "com\.mamie.*tracks2pictures" "$file" | head -3
-            fi
-          done
-          
-          # Exclude build.yml itself (contains the grep pattern)
-          for file in $(find . -type f \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" \) -not -path "./app-release-metadata.yml" -not -name "build.yml"); do
-            if grep -q "com\.mamieia\.tracks2pictures" "$file"; then
-              echo "⚠️  Found old package name 'com.mamieia.tracks2pictures' in: $file"
-            fi
-          done
-          
-          echo "Package name consistency check complete."
-          
-          if grep -r "com\.mamieia\.tracks2pictures" app/src/ app/build.gradle 2>/dev/null; then
-            echo "❌ ERROR: Old package name 'com.mamieia.tracks2pictures' still present!"
-            exit 1
-          fi
-          
-          echo "✓ No old package name found."
-          
       - name: Build APK
         run: |
+          cd android
           chmod +x ./gradlew
           ./gradlew assembleRelease
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: tracks-to-pictures-${{ env.VERSION_NAME }}.apk
-          path: app/build/outputs/apk/release/app-release.apk
-      - name: Create GitHub Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Create Release
         run: |
+          cd android
           apk=app/build/outputs/apk/release/app-release.apk
           tag="v${{ env.VERSION_NAME }}"
-          gh release create "$tag" "$apk" --title "$tag" --draft
+          
           # Create Android source archive
           echo "Creating Android source archive..."
           cd app/src/main
           zip -r ../../android-src.zip java/ res/ AndroidManifest.xml
           cd ../../..
-
+          
+          gh release create "$tag" "$apk" --title "$tag" --draft
+          if [ -f web-source.zip ]; then
+            gh release upload "$tag" web-source.zip
+            echo "OK Added web-source.zip to release"
+          fi
           if [ -f android-src.zip ]; then
             gh release upload "$tag" android-src.zip
             echo "OK Added android-src.zip to release"
