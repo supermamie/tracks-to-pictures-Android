@@ -33,53 +33,51 @@ jobs:
         run: |
           mkdir -p android/build
           
-          # Parse git_repo URL from checkout
-          cd android
-          python3 .github/scripts/parse_git_repo.py app-release-metadata.yml .github/site-config.json > build/parse.txt
+          # Parse git_repo URL from android checkout (paths relative to workspace root)
+          python3 android/.github/scripts/parse_git_repo.py android/app-release-metadata.yml android/.github/site-config.json > android/build/parse.txt
           
           # Read parsed values
-          PLATFORM=$(grep '^platform=' build/parse.txt | cut -d= -f2)
-          REPO=$(grep '^repo=' build/parse.txt | cut -d= -f2)
-          GIT_REPO=$(grep '^git_repo=' build/parse.txt | cut -d= -f2)
+          PLATFORM=$(grep '^platform=' android/build/parse.txt | cut -d= -f2)
+          REPO=$(grep '^repo=' android/build/parse.txt | cut -d= -f2)
+          GIT_REPO=$(grep '^git_repo=' android/build/parse.txt | cut -d= -f2)
           
           echo "parsed: $GIT_REPO → platform=$PLATFORM, repo=$REPO"
           
           if [ "$PLATFORM" = "github" ]; then
             echo "=== GitHub mode ==="
-            curl -sfL "https://api.github.com/repos/$REPO/releases" -o build/releases.json || { echo "❌ Failed to fetch GitHub releases"; exit 1; }
-            LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.published_at) | .[-1].tag_name' build/releases.json | sed 's/^v//')
+            curl -sfL "https://api.github.com/repos/$REPO/releases" -o android/build/releases.json || { echo "❌ Failed to fetch GitHub releases"; exit 1; }
+            LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.published_at) | .[-1].tag_name' android/build/releases.json | sed 's/^v//')
             if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then echo "❌ No GitHub releases found"; exit 1; fi
             echo "Latest GitHub release: $LATEST_TAG"
-            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' build/releases.json)
+            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
             if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG"; fi
-            curl -sfL "https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.zip" -o build/web-source.zip
+            curl -sfL "https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.zip" -o android/build/web-source.zip
             
           elif [ "$PLATFORM" = "gitlab" ]; then
             echo "=== GitLab mode ==="
             API_REPO=$(echo "$REPO" | sed 's|/|%2F|g')
-            curl -sfL "https://gitlab.com/api/v4/projects/$API_REPO/releases" -o build/releases.json || { echo "❌ Failed to fetch GitLab releases"; exit 1; }
-            LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.created_at) | .[-1].tag_name' build/releases.json | sed 's/^v//')
+            curl -sfL "https://gitlab.com/api/v4/projects/$API_REPO/releases" -o android/build/releases.json || { echo "❌ Failed to fetch GitLab releases"; exit 1; }
+            LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json | sed 's/^v//')
             if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then echo "❌ No GitLab releases found"; exit 1; fi
             echo "Latest GitLab release: $LATEST_TAG"
-            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v" + $ver + "."))] | length' build/releases.json)
+            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
             if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG"; fi
-            curl -sfL "https://gitlab.com/$REPO/-/archive/$LATEST_TAG/$REPO-$LATEST_TAG.zip" -o build/web-source.zip
+            curl -sfL "https://gitlab.com/$REPO/-/archive/$LATEST_TAG/$REPO-$LATEST_TAG.zip" -o android/build/web-source.zip
             
           else
             echo "=== Direct URL mode ==="
-            curl -sfL -o build/web-source.zip "$GIT_REPO"
+            curl -sfL -o android/build/web-source.zip "$GIT_REPO"
             BUILD_VERSION="1.0.0"
           fi
           
           # Verify download
-          if [ ! -s build/web-source.zip ]; then echo "❌ Download failed — empty file"; exit 1; fi
-          echo "✅ Downloaded: $(du -b build/web-source.zip | cut -f1) bytes"
+          if [ ! -s android/build/web-source.zip ]; then echo "❌ Download failed — empty file"; exit 1; fi
+          echo "✅ Downloaded: $(du -b android/build/web-source.zip | cut -f1) bytes"
           echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
 
       - name: Fix web structure
         run: |
-          cd android
-          python3 .github/scripts/fix_web_structure.py build/
+          python3 android/.github/scripts/fix_web_structure.py android/build/
 
       - name: Build APK
         run: |
