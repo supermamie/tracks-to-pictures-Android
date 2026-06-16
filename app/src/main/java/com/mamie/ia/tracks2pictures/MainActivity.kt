@@ -1,6 +1,7 @@
 package com.mamie.ia.tracks2pictures
 
 import android.os.Bundle
+import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -54,6 +55,8 @@ class MainActivity : AppCompatActivity() {
                     val stream: InputStream = assets.open(assetPath)
                     WebResourceResponse(mimeType, "UTF-8", stream)
                 } catch (e: IOException) {
+                    // Log the error and return null so WebView can try to load it itself
+                    Log.e(TAG, "IOException for asset: $assetPath (${e.message})")
                     null
                 }
             }
@@ -61,5 +64,9 @@ class MainActivity : AppCompatActivity() {
         
         // Load index.html from assets
         webView.loadUrl("file:///android_asset/web/index.html")
+    }
+    
+    companion object {
+        private const val TAG = "TracksToPictures"
     }
 }

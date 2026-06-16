@@ -89,7 +89,13 @@ jobs:
       - name: Fix web structure
         run: |
           python3 android/.github/scripts/fix_web_structure.py android/build/
-
+      
+      - name: Copy web content to assets
+        run: |
+          cd android
+          rm -rf app/src/main/assets/web
+          cp -r build/ app/src/main/assets/web
+      
       - name: Build APK
         run: |
           cd android
