@@ -46,23 +46,34 @@ jobs:
           if [ "$PLATFORM" = "github" ]; then
             echo "=== GitHub mode ==="
             curl -sfL "https://api.github.com/repos/$REPO/releases" -o android/build/releases.json || { echo "❌ Failed to fetch GitHub releases"; exit 1; }
-            LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.published_at) | .[-1].tag_name' android/build/releases.json | sed 's/^v//')
+            # Latest release tag (keep the 'v' prefix)
+            LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.published_at) | .[-1].tag_name' android/build/releases.json)
             if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then echo "❌ No GitHub releases found"; exit 1; fi
             echo "Latest GitHub release: $LATEST_TAG"
+            # Count incrementals (v1.0.7.1, v1.0.7.2, etc.)
             INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
             if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG"; fi
+            echo "Build version: $BUILD_VERSION"
+            # GitHub archive uses the tag with 'v'
             curl -sfL "https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.zip" -o android/build/web-source.zip
             
           elif [ "$PLATFORM" = "gitlab" ]; then
             echo "=== GitLab mode ==="
+            # API needs / encoded as %2F
             API_REPO=$(echo "$REPO" | sed 's|/|%2F|g')
             curl -sfL "https://gitlab.com/api/v4/projects/$API_REPO/releases" -o android/build/releases.json || { echo "❌ Failed to fetch GitLab releases"; exit 1; }
-            LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json | sed 's/^v//')
+            # Latest release tag (keep the 'v' prefix)
+            LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json)
             if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then echo "❌ No GitLab releases found"; exit 1; fi
             echo "Latest GitLab release: $LATEST_TAG"
+            # Count incrementals (v1.0.7.1, v1.0.7.2, etc.)
             INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
             if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG"; fi
-            curl -sfL "https://gitlab.com/$REPO/-/archive/$LATEST_TAG/$REPO-$LATEST_TAG.zip" -o android/build/web-source.zip
+            echo "Build version: $BUILD_VERSION"
+            # GitLab archive uses the tag with 'v'
+            ARCHIVE_URL="https://gitlab.com/$REPO/-/archive/$LATEST_TAG/$REPO-$LATEST_TAG.zip"
+            echo "Downloading: $ARCHIVE_URL"
+            curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
             
           else
             echo "=== Direct URL mode ==="
