@@ -8,7 +8,6 @@ on:
 env:
   OWNER: supermamie
   NAME: tracks-to-pictures-Android
-  GITLAB_PROJECT: "mamie_ia%2Ftracks-to-pictures"
 
 jobs:
   build:
@@ -34,9 +33,9 @@ jobs:
         run: |
           mkdir -p android/build
           
-          # Download GitLab releases
+          # Download GitLab releases (API uses %2F for /)
           echo "Fetching GitLab releases..."
-          curl -sfL "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT/releases" -o android/build/releases.json || { echo "❌ Failed to download releases"; cat android/build/releases.json; exit 1; }
+          curl -sfL "https://gitlab.com/api/v4/projects/mamie_ia%2Ftracks-to-pictures/releases" -o android/build/releases.json || { echo "❌ Failed to download releases"; cat android/build/releases.json; exit 1; }
           
           # Extract latest valid release (with non-null tag_name)
           LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null and (.tag_name | type) == "string")] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json)
@@ -66,8 +65,8 @@ jobs:
           echo "Build version: $BUILD_VERSION"
           echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
           
-          # Download the web archive from GitLab
-          ARCHIVE_URL="https://gitlab.com/$GITLAB_PROJECT/-/archive/$LATEST_TAG/tracks-to-pictures-$LATEST_TAG.zip"
+          # Download the web archive from GitLab (use / not %2F)
+          ARCHIVE_URL="https://gitlab.com/mamie_ia/tracks-to-pictures/-/archive/$LATEST_TAG/tracks-to-pictures-$LATEST_TAG.zip"
           echo "Downloading: $ARCHIVE_URL"
           curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
           
