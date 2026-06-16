@@ -283,18 +283,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          # Create the release with the APK
-          gh release create v${{ env.VERSION_NAME }} \
-            app/build/outputs/apk/release/app-release.apk \
-            --title "v${{ env.VERSION_NAME }}" \
-            --draft
-          
-          # Add web source archive if it exists
+          apk=app/build/outputs/apk/release/app-release.apk
+          tag="v${{ env.VERSION_NAME }}"
+          gh release create "$tag" "$apk" --title "$tag" --draft
           if [ -f web-source.zip ]; then
-            echo "Adding web-source.zip to release..."
-            gh release upload "v${{ env.VERSION_NAME }}" web-source.zip
+            gh release upload "$tag" web-source.zip
+            echo "✅ Added web-source.zip to release"
           else
-            echo "⚠️  No web-source.zip found — skipping source upload"
+            echo "⚠️ No web-source.zip found — skipped"
           fi
 
           name: "v${{ env.VERSION_NAME }}"
