@@ -194,6 +194,7 @@ jobs:
             echo "Extracting web archive..."
             unzip -q web-archive.zip -d app/src/main/assets/web/
             python3 .github/scripts/fix_web_structure.py app/src/main/assets/web/
+            python3 .github/scripts/embed_translations.py app/src/main/assets/web/
             cp web-archive.zip web-source.zip
             rm web-archive.zip
           fi
