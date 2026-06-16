@@ -291,9 +291,3 @@ jobs:
           else
             echo "⚠️ No web-source.zip found — skipped"
           fi
-
-          name: "v${{ env.VERSION_NAME }}"
-          draft: true
-          files: |
-            app/build/outputs/apk/release/app-release.apk
-            web-source.zip
