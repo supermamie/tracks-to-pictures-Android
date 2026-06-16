@@ -28,57 +28,103 @@ jobs:
           path: android
           fetch-depth: 0
 
-      - name: Download web archive from GitLab
+      - name: Download web archive
         id: download-web
         run: |
           mkdir -p android/build
           
-          # Load site config from repo
-          SITE_REPO=$(cat android/.github/site-config.json | jq -r '.site_repo')
-          SITE_HOST=$(cat android/.github/site-config.json | jq -r '.site_host')
+          # Load site config
+          cat android/.github/site-config.json > android/build/config.json
           
-          echo "Building URLs from config: $SITE_REPO on $SITE_HOST"
+          # Detect config type
+          CONFIG_TYPE=$(jq -r '.source | type' android/build/config.json)
           
-          # API URL uses path with encoded /
-          API_URL="https://$SITE_HOST/api/v4/projects/$SITE_REPO/releases"
-          echo "API URL: $API_URL"
-          
-          # Download GitLab releases (API needs / encoded as %2F)
-          echo "Fetching GitLab releases..."
-          curl -sfL "$API_URL" -o android/build/releases.json || { echo "❌ Failed to download releases"; cat android/build/releases.json; exit 1; }
-          
-          # Extract latest valid release (with non-null tag_name)
-          LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null and (.tag_name | type) == "string")] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json)
-          
-          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-            echo "❌ No valid releases found"
-            echo "Releases content: $(cat android/build/releases.json)"
-            exit 1
-          fi
-          
-          echo "Latest GitLab release: $LATEST_TAG"
-          
-          # Count all matching versions for incremental numbering
-          ALL_COUNT=$(jq -r --arg ver "$LATEST_TAG" \
-            '[.[] | select(.tag_name != null and (.tag_name == "v" + $ver or (.tag_name | startswith("v" + $ver + "."))))] | length' android/build/releases.json)
-          
-          INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" \
-            '[.[] | select(.tag_name != null and (.tag_name | startswith("v" + $ver + ".")))] | length' android/build/releases.json)
-          
-          # Determine the build version
-          if [ "$INCREMENTAL_COUNT" -eq 0 ]; then
-            BUILD_VERSION="$LATEST_TAG"
+          if [ "$CONFIG_TYPE" = "string" ]; then
+            # Case 1: Direct URL
+            URL=$(jq -r '.source' android/build/config.json)
+            echo "Mode: Direct URL"
+            echo "URL: $URL"
+            curl -sfL -o android/build/web-source.zip "$URL"
+            BUILD_VERSION=$(jq -r '.version // "1.0.0"' android/build/config.json)
+            echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
           else
-            BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"
+            # Case 2: Object with host + repo (GitLab or GitHub)
+            HOST=$(jq -r '.source.host' android/build/config.json)
+            REPO=$(jq -r '.source.repo' android/build/config.json)
+            
+            echo "Mode: API (host=$HOST, repo=$REPO)"
+            
+            # Detect if GitHub or GitLab
+            if echo "$HOST" | grep -q "github"; then
+              echo "=== GitHub mode ==="
+              
+              # Get latest release
+              curl -sfL "https://api.github.com/repos/$REPO/releases" -o android/build/releases.json || { echo "❌ Failed"; exit 1; }
+              
+              # Extract latest tag
+              LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.published_at) | .[-1].tag_name' android/build/releases.json | sed 's/^v//')
+              
+              if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+                echo "❌ No GitHub releases found"
+                exit 1
+              fi
+              
+              echo "Latest GitHub release: $LATEST_TAG"
+              
+              # Count incrementals (v1.0.7.1, v1.0.7.2, etc.)
+              INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" \
+                '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
+              
+              if [ "$INCREMENTAL_COUNT" -gt 0 ]; then
+                BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"
+              else
+                BUILD_VERSION="$LATEST_TAG"
+              fi
+              
+              echo "Build version: $BUILD_VERSION"
+              echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
+              
+              # Download archive
+              ARCHIVE_URL="https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.zip"
+              curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
+            else
+              echo "=== GitLab mode ==="
+              
+              # API needs / encoded as %2F
+              API_REPO=$(echo "$REPO" | sed 's|/|%2F|g')
+              
+              # Get latest release
+              curl -sfL "https://$HOST/api/v4/projects/$API_REPO/releases" -o android/build/releases.json || { echo "❌ Failed"; exit 1; }
+              
+              # Extract latest tag
+              LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json | sed 's/^v//')
+              
+              if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+                echo "❌ No GitLab releases found"
+                exit 1
+              fi
+              
+              echo "Latest GitLab release: $LATEST_TAG"
+              
+              # Count incrementals
+              INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" \
+                '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
+              
+              if [ "$INCREMENTAL_COUNT" -gt 0 ]; then
+                BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"
+              else
+                BUILD_VERSION="$LATEST_TAG"
+              fi
+              
+              echo "Build version: $BUILD_VERSION"
+              echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
+              
+              # Download archive (URL uses / not %2F)
+              ARCHIVE_URL="https://$HOST/$REPO/-/archive/$LATEST_TAG/$REPO-$LATEST_TAG.zip"
+              echo "Downloading: $ARCHIVE_URL"
+              curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
+            fi
           fi
-          
-          echo "Build version: $BUILD_VERSION"
-          echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
-          
-          # Download the web archive from GitLab (use / not %2F)
-          ARCHIVE_URL="https://$SITE_HOST/$SITE_REPO/-/archive/$LATEST_TAG/tracks-to-pictures-$LATEST_TAG.zip"
-          echo "Downloading: $ARCHIVE_URL"
-          curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
           
           # Verify download
           if [ ! -s android/build/web-source.zip ]; then

@@ -1,4 +1,6 @@
 {
-  "site_repo": "mamie_ia/tracks-to-pictures",
-  "site_host": "gitlab.com"
+  "source": {
+    "host": "gitlab.com",
+    "repo": "mamie_ia/tracks-to-pictures"
+  }
 }
