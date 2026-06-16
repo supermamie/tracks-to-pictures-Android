@@ -100,7 +100,7 @@ jobs:
         run: |
           cd android
           # Get the latest Android release tag and increment the last number
-          LATEST_TAG=$(curl -sfL -H "Authorization: token $GH_TOKEN" "https://api.github.com/repos/$OWNER/$NAME/releases" | jq -r '[.[] | .tag_name] | sort_by(. | sub("^v", "") | split(".") | map(tonumber)) | last // "v0.0.1"')
+          LATEST_TAG=$(curl -sfL -H "Authorization: token $GH_TOKEN" "https://api.github.com/repos/$OWNER/$NAME/releases" | jq -r '[.[] | .tag_name] | sort_by(. | ltrimstr("v") | split(".") | map(tonumber)) | last // "v0.0.1"')
           
           if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
             echo "No existing Android releases — starting fresh"
