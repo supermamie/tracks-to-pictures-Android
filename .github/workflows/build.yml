@@ -28,12 +28,12 @@ jobs:
           path: android
           fetch-depth: 0
 
-      - name: Download web archive
+      - name: Download web archive from GitLab
         id: download-web
         run: |
           mkdir -p android/build
           
-          # Parse git_repo URL from android checkout (paths relative to workspace root)
+          # Parse git_repo URL from android checkout
           python3 android/.github/scripts/parse_git_repo.py android/app-release-metadata.yml android/.github/site-config.json > android/build/parse.txt
           
           # Read parsed values
@@ -46,31 +46,18 @@ jobs:
           if [ "$PLATFORM" = "github" ]; then
             echo "=== GitHub mode ==="
             curl -sfL "https://api.github.com/repos/$REPO/releases" -o android/build/releases.json || { echo "❌ Failed to fetch GitHub releases"; exit 1; }
-            # Latest release tag (keep the 'v' prefix)
             LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.published_at) | .[-1].tag_name' android/build/releases.json)
             if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then echo "❌ No GitHub releases found"; exit 1; fi
             echo "Latest GitHub release: $LATEST_TAG"
-            # Count incrementals (v1.0.7.1, v1.0.7.2, etc.)
-            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
-            if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG.1"; fi
-            echo "Build version: $BUILD_VERSION"
-            # GitHub archive uses the tag with 'v'
             curl -sfL "https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.zip" -o android/build/web-source.zip
             
           elif [ "$PLATFORM" = "gitlab" ]; then
             echo "=== GitLab mode ==="
-            # API needs / encoded as %2F
             API_REPO=$(echo "$REPO" | sed 's|/|%2F|g')
             curl -sfL "https://gitlab.com/api/v4/projects/$API_REPO/releases" -o android/build/releases.json || { echo "❌ Failed to fetch GitLab releases"; exit 1; }
-            # Latest release tag (keep the 'v' prefix)
             LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json)
             if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then echo "❌ No GitLab releases found"; exit 1; fi
             echo "Latest GitLab release: $LATEST_TAG"
-            # Count incrementals (v1.0.7.1, v1.0.7.2, etc.)
-            INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_TAG" '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v" + $ver + "."))] | length' android/build/releases.json)
-            if [ "$INCREMENTAL_COUNT" -gt 0 ]; then BUILD_VERSION="$LATEST_TAG.$(( INCREMENTAL_COUNT + 1 ))"; else BUILD_VERSION="$LATEST_TAG.1"; fi
-            echo "Build version: $BUILD_VERSION"
-            # GitLab archive uses the tag with 'v'
             ARCHIVE_URL="https://gitlab.com/$REPO/-/archive/$LATEST_TAG/$REPO-$LATEST_TAG.zip"
             echo "Downloading: $ARCHIVE_URL"
             curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
@@ -78,14 +65,12 @@ jobs:
           else
             echo "=== Direct URL mode ==="
             curl -sfL -o android/build/web-source.zip "$GIT_REPO"
-            BUILD_VERSION="1.0.0"
           fi
           
           # Verify download
           if [ ! -s android/build/web-source.zip ]; then echo "❌ Download failed — empty file"; exit 1; fi
           echo "✅ Downloaded: $(du -b android/build/web-source.zip | cut -f1) bytes"
-          echo "VERSION_NAME=$BUILD_VERSION" >> $GITHUB_ENV
-
+      
       - name: Fix web structure
         run: |
           python3 android/.github/scripts/fix_web_structure.py android/build/
@@ -94,22 +79,49 @@ jobs:
         run: |
           cd android
           rm -rf app/src/main/assets/web
-          cp -r build/ app/src/main/assets/web
+          mkdir -p app/src/main/assets/web
+          cp build/index.html app/src/main/assets/web/
+          cp -r build/js build/css build/lib build/fonts app/src/main/assets/web/
+          cp build/favicon.svg build/logo.png app/src/main/assets/web/
+      
+      - name: Build version from existing Android releases
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd android
+          # Get the latest Android release tag and increment the last number
+          LATEST_TAG=$(curl -sfL "https://api.github.com/repos/$OWNER/$NAME/releases" | jq -r '[.[] | .tag_name] | sort_by(. | split(".") | maptonumber) | last // "v0.0.1"')
+          
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+            echo "No existing Android releases — starting fresh"
+            echo "version=v0.0.1" >> $GITHUB_OUTPUT
+          else
+            echo "Latest Android release: $LATEST_TAG"
+            # Increment the last segment of the version
+            NEW_VER=$(echo "$LATEST_TAG" | sed 's/^v//' | awk -F. '{
+                new = $(NF) + 1;
+                for (i = 1; i < NF; i++) printf "%s.", $i;
+                print new
+            }')
+            echo "New version: $NEW_VER"
+            echo "version=v$NEW_VER" >> $GITHUB_OUTPUT
+          fi
       
       - name: Build APK
         run: |
           cd android
           chmod +x ./gradlew
           ./gradlew assembleRelease
-
+      
       - name: Create GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          VERSION_NAME: ${{ env.VERSION_NAME }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_VERSION: ${{ steps.version.outputs.version }}
         run: |
           cd android
           apk=app/build/outputs/apk/release/app-release.apk
-          tag="${{ env.VERSION_NAME }}"
+          tag="v${BUILD_VERSION}"
           
           # Create Android source archive
           echo "Creating Android source archive..."
