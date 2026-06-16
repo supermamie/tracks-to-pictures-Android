@@ -191,6 +191,7 @@ jobs:
           if [ -f web-archive.zip ]; then
             echo "Extracting web archive..."
             unzip -q web-archive.zip -d app/src/main/assets/web/
+            cp web-archive.zip web-source.zip
             rm web-archive.zip
           fi
 
@@ -274,12 +275,26 @@ jobs:
         with:
           name: tracks-to-pictures-${{ env.VERSION_NAME }}.apk
           path: app/build/outputs/apk/release/app-release.apk
-
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GH_TOKEN }}
-          tag_name: v${{ env.VERSION_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          # Create the release with the APK
+          gh release create v${{ env.VERSION_NAME }} \
+            app/build/outputs/apk/release/app-release.apk \
+            --title "v${{ env.VERSION_NAME }}" \
+            --draft
+          
+          # Add web source archive if it exists
+          if [ -f web-source.zip ]; then
+            echo "Adding web-source.zip to release..."
+            gh release upload "v${{ env.VERSION_NAME }}" web-source.zip
+          else
+            echo "⚠️  No web-source.zip found — skipping source upload"
+          fi
+
           name: "v${{ env.VERSION_NAME }}"
           draft: true
-          files: app/build/outputs/apk/release/app-release.apk
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+            web-source.zip
