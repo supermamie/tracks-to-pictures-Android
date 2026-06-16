@@ -96,11 +96,11 @@ jobs:
       - name: Build version from existing Android releases
         id: version
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           cd android
           # Get the latest Android release tag and increment the last number
-          LATEST_TAG=$(curl -sfL "https://api.github.com/repos/$OWNER/$NAME/releases" | jq -r '[.[] | .tag_name] | sort_by(. | split(".") | map(tonumber)) | last // "v0.0.1"')
+          LATEST_TAG=$(curl -sfL -H "Authorization: token $GH_TOKEN" "https://api.github.com/repos/$OWNER/$NAME/releases" | jq -r '[.[] | .tag_name] | sort_by(. | sub("^v", "") | split(".") | map(tonumber)) | last // "v0.0.1"')
           
           if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
             echo "No existing Android releases — starting fresh"
@@ -125,7 +125,7 @@ jobs:
       
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
           BUILD_VERSION: ${{ steps.version.outputs.version }}
         run: |
           cd android
@@ -137,6 +137,9 @@ jobs:
           cd app/src/main
           zip -r ../../android-src.zip java/ res/ AndroidManifest.xml
           cd ../../..
+          
+          # Authenticate with GH_TOKEN
+          echo "$GH_TOKEN" | gh auth login --with-token
           
           gh release create "$tag" "$apk" --title "$tag" --draft
           if [ -f build/web-source.zip ]; then gh release upload "$tag" build/web-source.zip; fi
