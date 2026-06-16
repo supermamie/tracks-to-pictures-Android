@@ -7,33 +7,31 @@
 
     <!-- Outer circle -->
     <path
-        android:fillColor="#00D4FF"
+        android:fillColor="#00d4ff"
         android:fillAlpha="0.15"
-        android:strokeColor="#00D4FF"
+        android:strokeColor="#00d4ff"
+        android:strokeAlpha="0.15"
         android:strokeWidth="2"
-        android:pathData="M24,2 C2,2 2,46 24,46 46,46 46,2 24,2"/>
-
+        android:pathData="M 24 2 C 36.2 2 46 11.8 46 24 C 46 36.2 36.2 46 24 46 C 11.8 46 2 36.2 2 24 C 2 11.8 11.8 2 24 2 Z" />
     <!-- Inner circle -->
     <path
-        android:strokeColor="#00D4FF"
-        android:strokeWidth="1"
+        android:fillAlpha="0.5"
+        android:strokeColor="#00d4ff"
         android:strokeAlpha="0.5"
-        android:pathData="M24,8 C11.05,8 8,11.05 8,24 8,36.95 11.05,40 24,40 36.95,40 40,36.95 40,24 40,11.05 36.95,8 24,8"/>
-
+        android:strokeWidth="1"
+        android:pathData="M 24 8 C 32.8 8 40 15.2 40 24 C 40 32.8 32.8 40 24 40 C 15.2 40 8 32.8 8 24 C 8 15.2 15.2 8 24 8 Z" />
     <!-- Wave line -->
     <path
-        android:strokeColor="#00D4FF"
+        android:strokeColor="#00d4ff"
         android:strokeWidth="2.5"
-        android:pathData="M10,24 Q18,10 28,20 Q38,30 42,18"/>
-
+        android:strokeLineCap="round"
+        android:pathData="M10 24 Q18 10, 28 20 Q38 30, 42 18" />
     <!-- Red dot (left) -->
     <path
-        android:fillColor="#FF6B6B"
-        android:pathData="M10,24 C7.79,24 6,25.79 6,28 6,30.21 7.79,32 10,32 12.21,32 14,30.21 14,28 14,25.79 12.21,24 10,24"/>
-
+        android:fillColor="#ff6b6b"
+        android:pathData="M 10 21 C 11.7 21 13 22.3 13 24 C 13 25.7 11.7 27 10 27 C 8.3 27 7 25.7 7 24 C 7 22.3 8.3 21 10 21 Z" />
     <!-- Green dot (right) -->
     <path
-        android:fillColor="#22C55E"
-        android:pathData="M42,18 C39.79,18 38,19.79 38,22 38,24.21 39.79,26 42,26 44.21,26 46,24.21 46,22 46,19.79 44.21,18 42,18"/>
-
+        android:fillColor="#22c55e"
+        android:pathData="M 42 15 C 43.7 15 45 16.3 45 18 C 45 19.7 43.7 21 42 21 C 40.3 21 39 19.7 39 18 C 39 16.3 40.3 15 42 15 Z" />
 </vector>
