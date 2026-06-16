@@ -1,5 +1,5 @@
 # GitHub Workflow — Build and Release Android APK
-# Triggers on workflow_dispatch (manual) and push to main
+# Triggers only on manual workflow_dispatch
 
 name: Build and Release Android APK
 on:
@@ -9,10 +9,6 @@ on:
         description: 'Trigger prepare step'
         default: 'false'
         type: boolean
-  push:
-    branches: [ main ]
-    paths-ignore:
-      - '.github/**'
 
 env:
   OWNER: supermamie
