@@ -225,19 +225,11 @@ jobs:
           
           VERSION_CODE=$(( $(git rev-list --count HEAD) + 1000 ))
 
-          # Update build.gradle with new version
-          sed -i "s/versionName \".*\"/versionName \"${VERSION_NAME}\"/" app/build.gradle
-          sed -i "s/versionCode .*/versionCode ${VERSION_CODE}/" app/build.gradle
-
-          # Update web URL from metadata file
-          if [ -n "${{ env.web_url_fallback }}" ]; then
-            WEB_URL="${{ env.web_url_fallback }}"
-            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", \"${WEB_URL}\"/" app/build.gradle
-          else
-            # Empty web_url_fallback — set about:blank so MainActivity loads error.html
-            sed -i "s/buildConfigField \"String\", \"WEB_URL\", .*/buildConfigField \"String\", \"WEB_URL\", \"about:blank\"/" app/build.gradle
-            echo "⚙️  web_url_fallback is empty — will load error page instead"
-          fi
+          # Update build.gradle with new version and web URL using Python helper
+          python3 .github/scripts/modify_build_gradle.py \
+            "${VERSION_NAME}" \
+            "${VERSION_CODE}" \
+            "${{ env.web_url_fallback }}"
 
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
