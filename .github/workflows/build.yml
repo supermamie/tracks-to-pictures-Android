@@ -144,7 +144,7 @@ jobs:
                 exit 1
               fi
               
-              LATEST_VERSION=$(jq -r '.[0].tag_name // empty' gitlab_releases.json)
+              LATEST_VERSION=$(jq -r '.[0].tag_name // empty' gitlab_releases.json | sed 's/^v//')
               if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
                 echo "❌ No version found in GitLab releases"
                 exit 1
