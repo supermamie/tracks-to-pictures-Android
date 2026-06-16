@@ -50,7 +50,7 @@ app_name: "Tracks to Pictures"
 git_repo: "https://gitlab.com/mamie_ia/tracks-to-pictures"
 
 # Direct URL to an archive (zip/tar.gz) — workflow downloads and extracts it
-# archive_url: "https://example.com/web-archive.zip"
+# archive_url: ""
 # Leave empty if using git_repo instead.
 
 # Fallback URL for the WebView (if no bundle is present)

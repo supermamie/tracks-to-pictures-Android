@@ -154,8 +154,10 @@ jobs:
               
               RELEASE_URL=$(jq -r '.[0].assets.sources[0].url // empty' gitlab_releases.json)
               if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then
-                echo "❌ No download URL found in GitLab release"
-                exit 1
+                echo "⚠️ No release assets found — building GitLab archive URL..."
+                # GitLab provides source archives for tags: /-/archive/{tag}.zip
+                RELEASE_URL="https://gitlab.com/mamie_ia/tracks-to-pictures/-/archive/$LATEST_VERSION/tracks-to-pictures-$LATEST_VERSION.zip"
+                echo "  Using: $RELEASE_URL"
               fi
               
               curl -s "https://gitlab.com/api/v4/projects/$OWNER%2F$NAME/releases" > gitlab_releases_count.json
@@ -194,7 +196,7 @@ jobs:
 
           if [ -f web-archive.zip ]; then
             echo "Extracting web archive..."
-            unzip -q web-archive.zip -d app/src/main/assets/web/
+            unzip -qj web-archive.zip -d app/src/main/assets/web/
             cp web-archive.zip web-source.zip
             rm web-archive.zip
           fi
