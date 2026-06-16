@@ -98,7 +98,7 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          GH_RELEASE_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
         run: |
           cd android
@@ -111,21 +111,6 @@ jobs:
           zip -r ../../android-src.zip java/ res/ AndroidManifest.xml
           cd ../../..
           
-          # Authenticate with personal token (has repo: full permissions)
-          echo "$GH_RELEASE_TOKEN" | gh auth login --with-token
-          
-          # Use GH_RELEASE_TOKEN to create the release
-          gh release create "$tag" \
-            --repo ${{ env.OWNER }}/${{ env.NAME }} \
-            --title "$tag" --draft \
-            "$apk"
-          
-          # Upload additional assets with the same token
-          if [ -f build/web-source.zip ]; then
-            gh release upload "$tag" build/web-source.zip \
-              --repo ${{ env.OWNER }}/${{ env.NAME }}
-          fi
-          if [ -f android-src.zip ]; then
-            gh release upload "$tag" android-src.zip \
-              --repo ${{ env.OWNER }}/${{ env.NAME }}
-          fi
+          gh release create "$tag" "$apk" --title "$tag" --draft
+          if [ -f build/web-source.zip ]; then gh release upload "$tag" build/web-source.zip; fi
+          if [ -f android-src.zip ]; then gh release upload "$tag" android-src.zip; fi
