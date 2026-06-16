@@ -119,16 +119,14 @@ jobs:
               
               curl -s "https://api.github.com/repos/$OWNER/$NAME/releases" > all_releases.json
               
-              # Count releases matching v$LATEST_VERSION or v$LATEST_VERSION.*
-              EXISTING_COUNT=$(jq -r --arg ver "$LATEST_VERSION" \
-                '[.[] | select(.tag_name == ("v" + $ver) or (.tag_name | startswith("v" + $ver + ".")))] | length' all_releases.json)
+              # Count incrementals matching v$LATEST_VERSION.*
+              INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_VERSION" \
+                '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' all_releases.json)
 
-              if [ "$EXISTING_COUNT" -eq 0 ]; then
+              if [ "$INCREMENTAL_COUNT" -eq 0 ]; then
                   FINAL_VERSION="$LATEST_VERSION"
-              elif [ "$EXISTING_COUNT" -eq 1 ]; then
-                  FINAL_VERSION="$LATEST_VERSION.1"
               else
-                  FINAL_VERSION="$LATEST_VERSION.$(( EXISTING_COUNT - 1 ))"
+                  FINAL_VERSION="$LATEST_VERSION.$(( INCREMENTAL_COUNT + 1 ))"
               fi
               
               echo "Latest release version: $LATEST_VERSION"
@@ -162,16 +160,14 @@ jobs:
               
               curl -s "https://gitlab.com/api/v4/projects/$OWNER%2F$NAME/releases" > gitlab_releases_count.json
               
-              # Count releases matching v$LATEST_VERSION or v$LATEST_VERSION.*
-              EXISTING_COUNT=$(jq -r --arg ver "$LATEST_VERSION" \
-                '[.[] | select(.tag_name == ("v" + $ver) or (.tag_name | startswith("v" + $ver + ".")))] | length' gitlab_releases_count.json)
+              # Count incrementals matching v$LATEST_VERSION.*
+              INCREMENTAL_COUNT=$(jq -r --arg ver "$LATEST_VERSION" \
+                '[.[] | select(.tag_name | startswith("v" + $ver + "."))] | length' gitlab_releases_count.json)
 
-              if [ "$EXISTING_COUNT" -eq 0 ]; then
+              if [ "$INCREMENTAL_COUNT" -eq 0 ]; then
                   FINAL_VERSION="$LATEST_VERSION"
-              elif [ "$EXISTING_COUNT" -eq 1 ]; then
-                  FINAL_VERSION="$LATEST_VERSION.1"
               else
-                  FINAL_VERSION="$LATEST_VERSION.$(( EXISTING_COUNT - 1 ))"
+                  FINAL_VERSION="$LATEST_VERSION.$(( INCREMENTAL_COUNT + 1 ))"
               fi
               
               echo "Latest release version: $LATEST_VERSION"
