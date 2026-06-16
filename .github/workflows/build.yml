@@ -98,7 +98,7 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          GH_RELEASE_TOKEN: ${{ secrets.GITHUB_RELEASE_TOKEN }}
+          GH_RELEASE_TOKEN: ${{ secrets.GH_TOKEN }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
         run: |
           cd android
@@ -112,7 +112,7 @@ jobs:
           cd ../../..
           
           # Authenticate with personal token (has repo: full permissions)
-          echo "$GH_RELEASE_TOKEN" | gh auth login --with-token --non-interactive
+          echo "$GH_RELEASE_TOKEN" | gh auth login --with-token
           
           # Use GH_RELEASE_TOKEN to create the release
           gh release create "$tag" \
