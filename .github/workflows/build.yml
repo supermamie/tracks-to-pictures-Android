@@ -99,23 +99,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           cd android
-          # Get the latest Android release tag and increment the last number
-          LATEST_TAG=$(curl -sfL -H "Authorization: token $GH_TOKEN" "https://api.github.com/repos/$OWNER/$NAME/releases" | jq -r '[.[] | .tag_name] | sort_by(. | ltrimstr("v") | split(".") | map(tonumber)) | last // "v0.0.1"')
-          
-          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-            echo "No existing Android releases — starting fresh"
-            echo "version=v0.0.1" >> $GITHUB_OUTPUT
-          else
-            echo "Latest Android release: $LATEST_TAG"
-            # Increment the last segment of the version
-            NEW_VER=$(echo "$LATEST_TAG" | sed 's/^v//' | awk -F. '{
-                new = $(NF) + 1;
-                for (i = 1; i < NF; i++) printf "%s.", $i;
-                print new
-            }')
-            echo "New version: $NEW_VER"
-            echo "version=v$NEW_VER" >> $GITHUB_OUTPUT
-          fi
+          VERSION=$(python3 .github/scripts/get_version.py "$OWNER" "$NAME" "$GH_TOKEN")
+          echo "New version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
       
       - name: Build APK
         run: |
@@ -130,14 +116,27 @@ jobs:
         run: |
           cd android
           apk=app/build/outputs/apk/release/app-release.apk
-          tag="v${BUILD_VERSION}"
+          tag="${BUILD_VERSION}"
           
-          # Create Android source archive
-          echo "Creating Android source archive..."
-          cd app/src/main
-          zip -r ../../android-src.zip java/ res/ AndroidManifest.xml
-          cd ../../..
+          # Create build archive (Android code + web content)
+          echo "Creating build archive..."
+          zip -r ../build-android.zip \
+            app/src/main/java/ \
+            app/src/main/res/ \
+            app/src/main/AndroidManifest.xml \
+            app/build.gradle \
+            build.gradle \
+            gradle/ \
+            gradlew \
+            gradlew.bat \
+            settings.gradle \
+            .github/ \
+            build/ \
+            app-release-metadata.yml \
+            .github/site-config.json \
+            -x ".git/*" "app/build/*"
           
           gh release create "$tag" "$apk" --title "$tag" --draft
-          if [ -f build/web-source.zip ]; then gh release upload "$tag" build/web-source.zip; fi
           if [ -f android-src.zip ]; then gh release upload "$tag" android-src.zip; fi
+          if [ -f build-web.zip ]; then gh release upload "$tag" build-web.zip; fi
+          if [ -f build-android.zip ]; then gh release upload "$tag" build-android.zip; fi
