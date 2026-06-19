@@ -93,6 +93,8 @@ jobs:
           ./gradlew assembleRelease
 
       - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
         run: |
           cd android
           apk=app/build/outputs/apk/release/app-release.apk
