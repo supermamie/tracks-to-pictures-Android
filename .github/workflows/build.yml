@@ -121,5 +121,3 @@ jobs:
           
           gh release create "$tag" "$apk" --title "$tag" --draft
           if [ -f build-android.zip ]; then gh release upload "$tag" build-android.zip; fi
-        env:
-          GH_TOKEN: ${{ github.token }}
