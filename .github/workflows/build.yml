@@ -94,7 +94,7 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
         run: |
           cd android
           apk=app/build/outputs/apk/release/app-release.apk
