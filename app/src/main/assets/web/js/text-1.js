@@ -1,3 +1,0 @@
-function chooseText() {
-    return "UN";
-}

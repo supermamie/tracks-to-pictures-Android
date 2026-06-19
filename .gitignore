@@ -13,3 +13,6 @@
 
 # Generated
 /app/src/main/res/mipmap-*/*.*
+
+# Web content (injected by build script)
+/app/src/main/assets/web/
