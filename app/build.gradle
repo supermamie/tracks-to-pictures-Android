@@ -3,8 +3,10 @@ plugins {
     id 'org.jetbrains.kotlin.android' version '1.9.24'
 }
 
+def keystoreFile = file("release-key.keystore")
+
 android {
-    namespace = "com.mamie.ia.tracks2pictures"
+    namespace "com.mamie.ia.tracks2pictures"
     compileSdk 34
 
     defaultConfig {
@@ -17,10 +19,17 @@ android {
 
     signingConfigs {
         release {
-            storeFile file("/home/pierre/.android/certs/demo.keystore")
-            storePassword "changeme"
-            keyAlias "demo-key"
-            keyPassword "changeme"
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = "android"
+                keyAlias = "trackstopictures"
+                keyPassword = "android"
+            } else {
+                storeFile = file("dev-debug.keystore")
+                storePassword = "android"
+                keyAlias = "debug"
+                keyPassword = "android"
+            }
         }
     }
 

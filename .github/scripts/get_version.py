@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Get latest release tag and compute next version.
 
-Usage: get_version.py <owner> <name> <gh_token>
+Usage: get_version.py <owner> <name>
 
 Returns: version string on stdout (e.g., v1.0.7.2)
 """
@@ -12,17 +12,21 @@ import re
 
 
 def main():
-    if len(sys.argv) != 4:
-        print("Usage: get_version.py <owner> <name> <token>", file=sys.stderr)
+    if len(sys.argv) != 3:
+        print("Usage: get_version.py <owner> <name>", file=sys.stderr)
         sys.exit(1)
 
-    owner, name, token = sys.argv[1], sys.argv[2], sys.argv[3]
+    owner, name = sys.argv[1], sys.argv[2]
+    import os
+    token = os.environ.get("GH_TOKEN", "")
+    import urllib.request
+
     url = f"https://api.github.com/repos/{owner}/{name}/releases"
 
     try:
-        import urllib.request
         req = urllib.request.Request(url)
-        req.add_header("Authorization", f"token {token}")
+        if token:
+            req.add_header("Authorization", f"token {token}")
         with urllib.request.urlopen(req) as r:
             releases = json.loads(r.read().decode())
     except Exception as e:

@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.OWNER }}/${{ env.NAME }}
-          ref: main
+          ref: feature/new-build
           path: android
           fetch-depth: 0
 
@@ -43,27 +43,27 @@ jobs:
           
           echo "Downloaded: $(du -b android/build/web-source.zip | cut -f1) bytes"
 
-      - name: Extract web archive and place in assets
+      - name: Extract web archive and place index.html in assets
         run: |
           cd android
           
           # Extract the web archive
           unzip -o build/web-source.zip
           
-          # Copy web content to assets
-          cp -r build/tracks-to-pictures-*/* app/src/main/assets/web/
+          # Copy only index.html to assets/web/
+          cp build/tracks-to-pictures-*/index.html app/src/main/assets/web/
           
-          echo "Web content copied to assets"
+          echo "index.html copied to assets/web/"
           echo "Assets contents:"
           ls -la app/src/main/assets/web/
 
       - name: Build version from existing Android releases
         id: version
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd android
-          VERSION=$(python3 .github/scripts/get_version.py "$OWNER" "$NAME" "$GH_TOKEN")
+          VERSION=$(python3 .github/scripts/get_version.py "$OWNER" "$NAME")
           echo "New version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
@@ -75,7 +75,7 @@ jobs:
           
           # Update versionName and versionCode in app/build.gradle
           sed -i "s/versionCode.*/versionCode 1/" app/build.gradle
-          sed -i "s/versionName.*/versionName \"$VER_NUM\"/" app/build.gradle
+          sed -i "s/versionName.*/versionName \\\"$VER_NUM\\\"/" app/build.gradle
           
           echo "Updated versionName to $VER_NUM"
           grep -E "versionCode|versionName" app/build.gradle
@@ -109,6 +109,7 @@ jobs:
             settings.gradle \
             .github/ \
             app/src/main/assets/web/ \
+            app/release-key.keystore \
             app/proguard-rules.pro \
             -x ".git/*" "app/build/*"
           

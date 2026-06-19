@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Get latest GitLab release tag.
 
-Usage: get_gitlab_release.py
-
 Returns: tag name on stdout (e.g., v1.0.7)
 """
 
