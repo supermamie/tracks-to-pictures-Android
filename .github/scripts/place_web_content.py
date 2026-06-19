@@ -10,6 +10,7 @@ Usage: place_web_content.py <build_dir> <assets_dir>
 """
 
 import os
+import shutil
 import sys
 
 
@@ -35,26 +36,18 @@ def main():
     # Determine where index.html is located
     index_dir = os.path.dirname(index_path)
 
-    # Check if index.html is at the root of the extracted archive
-    # (one level below build_dir, ignoring the extracted folder name)
-    root_candidates = []
-    for item in os.listdir(build_dir):
-        item_path = os.path.join(build_dir, item)
-        if os.path.isdir(item_path):
-            root_candidates.append(item)
-
-    # Check if index.html is directly under build_dir (root level)
+    # Check if index.html is at the root of build_dir
     index_is_root = False
     if os.path.exists(os.path.join(build_dir, "index.html")):
         index_is_root = True
 
     # If not root, check if there's exactly one folder containing index.html
     index_folder = None
-    for candidate in root_candidates:
-        candidate_index = os.path.join(build_dir, candidate, "index.html")
-        if os.path.exists(candidate_index):
+    for item in os.listdir(build_dir):
+        item_path = os.path.join(build_dir, item)
+        if os.path.isdir(item_path) and os.path.exists(os.path.join(item_path, "index.html")):
             if index_folder is None:
-                index_folder = candidate  # Found first folder
+                index_folder = item  # Found first folder
             else:
                 print("ERROR: index.html found in multiple folders", file=sys.stderr)
                 sys.exit(1)
@@ -81,12 +74,10 @@ def main():
         dst_path = os.path.join(assets_dir, item)
 
         if os.path.isdir(src_path):
-            import shutil
             if os.path.exists(dst_path):
                 shutil.rmtree(dst_path)
             shutil.copytree(src_path, dst_path)
         else:
-            import shutil
             shutil.copy2(src_path, dst_path)
 
     print(f"Contents placed in {assets_dir}:")

@@ -47,10 +47,17 @@ jobs:
         run: |
           cd android
           
-          # Extract the web archive
-          unzip -o build/web-source.zip
+          # Extract the web archive into build/ (cd into build/ first so unzip places files at top level)
+          mkdir -p build
+          cd build
+          unzip -o web-source.zip
+          cd ..
           
-          # Place web content in assets (all files, not just index.html)
+          # Show extracted files
+          echo "Extracted directory structure:"
+          find build/ -maxdepth 2 -type f | sort | head -30
+          
+          # Place web content in assets (all files from the extracted folder)
           python3 .github/scripts/place_web_content.py build app/src/main/assets/web
           
           echo "Assets contents:"
