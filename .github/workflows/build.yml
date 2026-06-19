@@ -43,19 +43,18 @@ jobs:
           
           echo "Downloaded: $(du -b android/build/web-source.zip | cut -f1) bytes"
 
-      - name: Extract web archive and place index.html in assets
+      - name: Extract web archive and place content in assets
         run: |
           cd android
           
           # Extract the web archive
           unzip -o build/web-source.zip
           
-          # Copy only index.html to assets/web/
-          cp build/tracks-to-pictures-*/index.html app/src/main/assets/web/
+          # Place web content in assets (all files, not just index.html)
+          python3 .github/scripts/place_web_content.py build app/src/main/assets/web
           
-          echo "index.html copied to assets/web/"
           echo "Assets contents:"
-          ls -la app/src/main/assets/web/
+          find app/src/main/assets/web/ -type f | sort
 
       - name: Build version from existing Android releases
         id: version
