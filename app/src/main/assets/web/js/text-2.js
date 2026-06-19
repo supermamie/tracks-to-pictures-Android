@@ -1,0 +1,3 @@
+function chooseText() {
+    return "DEUX";
+}

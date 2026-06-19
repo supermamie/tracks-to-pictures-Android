@@ -1,50 +1,34 @@
-import java.security.KeyStore
-
 plugins {
-    id 'com.android.application' version '8.4.0'
+    id 'com.android.application' version '8.5.0'
     id 'org.jetbrains.kotlin.android' version '1.9.24'
 }
 
-def keystoreFile = file("release-key.keystore")
-
 android {
-    namespace 'com.mamie.ia.tracks2pictures'
+    namespace = "com.mamie.ia.tracks2pictures"
     compileSdk 34
-
-    buildFeatures {
-        buildConfig true
-    }
 
     defaultConfig {
         applicationId "com.mamie.ia.tracks2pictures"
         minSdk 24
         targetSdk 34
-        versionCode 1002
+        versionCode 1
         versionName "1.0"
-        buildConfigField "String", "WEB_URL", "\"about:blank\""
     }
 
     signingConfigs {
         release {
-            if (keystoreFile.exists()) {
-                storeFile = keystoreFile
-                storePassword = "android"
-                keyAlias = "trackstopictures"
-                keyPassword = "android"
-            } else {
-                storeFile = file("dev-debug.keystore")
-                storePassword = "android"
-                keyAlias = "debug"
-                keyPassword = "android"
-            }
+            storeFile file("/home/pierre/.android/certs/demo.keystore")
+            storePassword "changeme"
+            keyAlias "demo-key"
+            keyPassword "changeme"
         }
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig = signingConfigs.release
         }
     }
 
@@ -59,6 +43,7 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.webkit:webkit:1.7.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 }

@@ -1,9 +1,9 @@
 package com.mamie.ia.tracks2pictures
 
 import android.os.Bundle
-import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
@@ -14,59 +14,45 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        
+
         val webView = findViewById<WebView>(R.id.webview)
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.setGeolocationEnabled(true)
-        webView.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-        
-        // WebViewClient: intercepts all requests and serves from assets/
+        val settings = webView.settings
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.setGeolocationEnabled(true)
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
                 view: WebView, request: WebResourceRequest
             ): WebResourceResponse? {
                 val url = request.url.toString()
-                
-                // Only intercept file:///android_asset/ URLs (local assets)
-                if (!url.startsWith("file:///android_asset/")) {
-                    return null
-                }
-                
-                // Get the relative path from the URL
+                if (!url.startsWith("file:///android_asset/")) return null
+
                 val assetPath = url.substring("file:///android_asset/".length)
-                
-                // Serve the file
+                val mimeType = when {
+                    assetPath.endsWith(".html") || assetPath.endsWith(".htm") -> "text/html; charset=utf-8"
+                    assetPath.endsWith(".css") -> "text/css; charset=utf-8"
+                    assetPath.endsWith(".js") -> "application/javascript; charset=utf-8"
+                    assetPath.endsWith(".json") -> "application/json; charset=utf-8"
+                    assetPath.endsWith(".svg") -> "image/svg+xml"
+                    assetPath.endsWith(".png") -> "image/png"
+                    assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg") -> "image/jpeg"
+                    assetPath.endsWith(".gif") -> "image/gif"
+                    assetPath.endsWith(".woff") || assetPath.endsWith(".woff2") -> "font/woff"
+                    assetPath.endsWith(".ttf") -> "font/ttf"
+                    else -> "application/octet-stream"
+                }
+
                 return try {
-                    val mimeType = when {
-                        assetPath.endsWith(".html") || assetPath.endsWith(".htm") -> "text/html; charset=utf-8"
-                        assetPath.endsWith(".css") -> "text/css; charset=utf-8"
-                        assetPath.endsWith(".js") -> "application/javascript; charset=utf-8"
-                        assetPath.endsWith(".json") -> "application/json; charset=utf-8"
-                        assetPath.endsWith(".svg") -> "image/svg+xml"
-                        assetPath.endsWith(".png") -> "image/png"
-                        assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg") -> "image/jpeg"
-                        assetPath.endsWith(".gif") -> "image/gif"
-                        assetPath.endsWith(".woff") || assetPath.endsWith(".woff2") -> "font/woff"
-                        assetPath.endsWith(".ttf") -> "font/ttf"
-                        else -> "application/octet-stream"
-                    }
-                    
                     val stream: InputStream = assets.open(assetPath)
                     WebResourceResponse(mimeType, "UTF-8", stream)
                 } catch (e: IOException) {
-                    // Log the error and return null so WebView can try to load it itself
-                    Log.e(TAG, "IOException for asset: $assetPath (${e.message})")
                     null
                 }
             }
         }
-        
-        // Load index.html from assets
+
         webView.loadUrl("file:///android_asset/web/index.html")
-    }
-    
-    companion object {
-        private const val TAG = "TracksToPictures"
     }
 }

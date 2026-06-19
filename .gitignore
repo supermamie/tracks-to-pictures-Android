@@ -1,24 +1,15 @@
-# Build outputs
-build/
-app/build/
-.gradle/
-*.aab
-*.apk
-*.ap_
+# Java / Android
+*.class
+*.log
 
-# Android Studio
-.idea/
-*.iml
-.local/
+# Android
+/.idea/
+/app/build/
+/local.properties
+/.android/
 
-# Android SDK
-local.properties
+# Build
+/build-android.zip
 
-# Gradle
-.gradle/
-
-# Generated files
-
-# OS
-.DS_Store
-Thumbs.db
+# Generated
+/app/src/main/res/mipmap-*/*.*

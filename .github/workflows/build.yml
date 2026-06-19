@@ -29,70 +29,34 @@ jobs:
           fetch-depth: 0
 
       - name: Download web archive from GitLab
-        id: download-web
         run: |
           mkdir -p android/build
           
-          # Parse git_repo URL from android checkout
-          python3 android/.github/scripts/parse_git_repo.py android/app-release-metadata.yml android/.github/site-config.json > android/build/parse.txt
+          # Get the latest release tag from GitLab
+          LATEST_TAG=$(python3 android/.github/scripts/get_gitlab_release.py)
           
-          # Read parsed values
-          PLATFORM=$(grep '^platform=' android/build/parse.txt | cut -d= -f2)
-          REPO=$(grep '^repo=' android/build/parse.txt | cut -d= -f2)
-          GIT_REPO=$(grep '^git_repo=' android/build/parse.txt | cut -d= -f2)
+          echo "Latest GitLab release: $LATEST_TAG"
           
-          echo "parsed: $GIT_REPO → platform=$PLATFORM, repo=$REPO"
+          # Download the web archive
+          curl -sfL "https://gitlab.com/mamie_ia/tracks-to-pictures/-/archive/$LATEST_TAG/tracks-to-pictures-$LATEST_TAG.zip" \
+            -o android/build/web-source.zip
           
-          if [ "$PLATFORM" = "github" ]; then
-            echo "=== GitHub mode ==="
-            curl -sfL "https://api.github.com/repos/$REPO/releases" -o android/build/releases.json || { echo "❌ Failed to fetch GitHub releases"; exit 1; }
-            LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.published_at) | .[-1].tag_name' android/build/releases.json)
-            if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then echo "❌ No GitHub releases found"; exit 1; fi
-            echo "Latest GitHub release: $LATEST_TAG"
-            curl -sfL "https://github.com/$REPO/archive/refs/tags/$LATEST_TAG.zip" -o android/build/web-source.zip
-            
-          elif [ "$PLATFORM" = "gitlab" ]; then
-            echo "=== GitLab mode ==="
-            API_REPO=$(echo "$REPO" | sed 's|/|%2F|g')
-            curl -sfL "https://gitlab.com/api/v4/projects/$API_REPO/releases" -o android/build/releases.json || { echo "❌ Failed to fetch GitLab releases"; exit 1; }
-            LATEST_TAG=$(jq -r '[.[] | select(.tag_name != null) | select(.tag_name | startswith("v"))] | sort_by(.created_at) | .[-1].tag_name' android/build/releases.json)
-            if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then echo "❌ No GitLab releases found"; exit 1; fi
-            echo "Latest GitLab release: $LATEST_TAG"
-            ARCHIVE_URL="https://gitlab.com/$REPO/-/archive/$LATEST_TAG/$REPO-$LATEST_TAG.zip"
-            echo "Downloading: $ARCHIVE_URL"
-            curl -sfL -o android/build/web-source.zip "$ARCHIVE_URL"
-            
-          else
-            echo "=== Direct URL mode ==="
-            curl -sfL -o android/build/web-source.zip "$GIT_REPO"
-          fi
-          
-          # Verify download
-          if [ ! -s android/build/web-source.zip ]; then echo "❌ Download failed — empty file"; exit 1; fi
-          echo "✅ Downloaded: $(du -b android/build/web-source.zip | cut -f1) bytes"
-      
-      - name: Extract web archive
+          echo "Downloaded: $(du -b android/build/web-source.zip | cut -f1) bytes"
+
+      - name: Extract web archive and place in assets
         run: |
           cd android
-          cd build
-          unzip -o web-source.zip
-          rm web-source.zip
-      
-      - name: Fix web structure
-        run: |
-          python3 android/.github/scripts/fix_web_structure.py android/build/
-      
-      - name: Copy web content to assets
-        run: |
-          cd android
-          echo "=== Contents of build/ ==="
-          ls -la build/
-          rm -rf app/src/main/assets/web
-          mkdir -p app/src/main/assets/web
-          cp build/index.html app/src/main/assets/web/
-          cp -r build/js build/css build/lib build/fonts app/src/main/assets/web/ 2>/dev/null || true
-          cp build/favicon.svg build/logo.png app/src/main/assets/web/ 2>/dev/null || true
-      
+          
+          # Extract the web archive
+          unzip -o build/web-source.zip
+          
+          # Copy web content to assets
+          cp -r build/tracks-to-pictures-*/* app/src/main/assets/web/
+          
+          echo "Web content copied to assets"
+          echo "Assets contents:"
+          ls -la app/src/main/assets/web/
+
       - name: Build version from existing Android releases
         id: version
         env:
@@ -102,21 +66,34 @@ jobs:
           VERSION=$(python3 .github/scripts/get_version.py "$OWNER" "$NAME" "$GH_TOKEN")
           echo "New version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-      
+
+      - name: Update version in build.gradle
+        run: |
+          cd android
+          VERSION="${{ steps.version.outputs.version }}"
+          VER_NUM=$(echo "$VERSION" | sed 's/^v//')
+          
+          # Update versionName and versionCode in app/build.gradle
+          sed -i "s/versionCode.*/versionCode 1/" app/build.gradle
+          sed -i "s/versionName.*/versionName \"$VER_NUM\"/" app/build.gradle
+          
+          echo "Updated versionName to $VER_NUM"
+          grep -E "versionCode|versionName" app/build.gradle
+
       - name: Build APK
         run: |
           cd android
           chmod +x ./gradlew
           ./gradlew assembleRelease
-      
+
       - name: Create GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          BUILD_VERSION: ${{ steps.version.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd android
           apk=app/build/outputs/apk/release/app-release.apk
-          tag="${BUILD_VERSION}"
+          version="${{ steps.version.outputs.version }}"
+          tag="${version}"
           
           # Create build archive (Android code + web content)
           echo "Creating build archive..."
@@ -131,12 +108,9 @@ jobs:
             gradlew.bat \
             settings.gradle \
             .github/ \
-            build/ \
-            app-release-metadata.yml \
-            .github/site-config.json \
+            app/src/main/assets/web/ \
+            app/proguard-rules.pro \
             -x ".git/*" "app/build/*"
           
           gh release create "$tag" "$apk" --title "$tag" --draft
-          if [ -f android-src.zip ]; then gh release upload "$tag" android-src.zip; fi
-          if [ -f build-web.zip ]; then gh release upload "$tag" build-web.zip; fi
           if [ -f build-android.zip ]; then gh release upload "$tag" build-android.zip; fi
