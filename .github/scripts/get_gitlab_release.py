@@ -1,29 +1,39 @@
 #!/usr/bin/env python3
-"""Get latest GitLab release tag.
+"""Get latest GitLab release tag via git ls-remote.
 
 Returns: tag name on stdout (e.g., v1.0.7)
 """
 
-import json
+import os
 import sys
-import urllib.request
+import subprocess
 
 
 def main():
-    url = "https://gitlab.com/mamie_ia/tracks-to-pictures/-/releases?per_page=1&order_by=created_at"
+    repo_url = "https://gitlab.com/mamie_ia/tracks-to-pictures.git"
     
     try:
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req) as r:
-            releases = json.loads(r.read().decode())
+        # Use git ls-remote to list all tags (only regular tags, not annotated)
+        result = subprocess.run(
+            ["git", "ls-remote", "--tags", "--sort=-version:refname", repo_url],
+            capture_output=True, text=True, timeout=30
+        )
         
-        if releases:
-            print(releases[0]['tag'])
-        else:
-            print('v1.0.0')
+        if result.returncode == 0:
+            # First line is the latest tag
+            lines = result.stdout.strip().split("\n")
+            if lines:
+                # Format: <hash>\trefs/tags/<tag>
+                parts = lines[0].split("\t")
+                if len(parts) >= 2:
+                    tag = parts[1].replace("refs/tags/", "").replace("^{}", "")
+                    print(tag)
+                    return
+        
+        print("v1.0.0")
     except Exception as e:
         print(f"error: {e}", file=sys.stderr)
-        print('v1.0.0')
+        print("v1.0.0")
 
 
 if __name__ == "__main__":
